@@ -32,11 +32,11 @@ jobs:
       run: |
         pylint --output-format=colorized \
                --disable=C0114,C0115,C0116 \
-               $(git ls-files '*.py' | grep -v 'tests/') > pylint_output.log  # Guarda resultados
+               $(git ls-files '*.py' | grep -v 'tests/') > pylint_output.log
         
     - name: Upload results as artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4  # Versión CORRECTA
+      uses: actions/upload-artifact@v4
       with:
         name: pylint-results-${{ matrix.python-version }}
         path: pylint_output.log
