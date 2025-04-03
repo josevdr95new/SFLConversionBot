@@ -74,8 +74,8 @@ class Handlers(PriceBot):
 - Amounts: Numbers with up to 8 decimals
 
 💡 *Examples:*
-/Stone ≈ Unit price
-/Stone 0.00054321 ≈ Conversion
+/stone ≈ Unit price
+/stone 20 ≈ Conversion
 /usd 1.2345 ≈ Value in USD
 /sfl 10.5678 ≈ Value in SFL
 """
