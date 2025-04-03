@@ -54,7 +54,7 @@ class Handlers(PriceBot):
 
 🔹 *Examples:*
 /merino wool ≈ Price of Merino Wool
-/merino wool 0.00000123 ≈ Convert Merino Wool
+/merino wool 5 ≈ Convert Merino Wool
 /usd 1.2345 ≈ Value of SFL
 /sfl 10.5678 ≈ Value of USD
 
