@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-      max-parallel: 3  # CORRECCIÓN: Fuera del bloque matrix
+      max-parallel: 3
     steps:
     - uses: actions/checkout@v4
     
@@ -32,11 +32,11 @@ jobs:
       run: |
         pylint --output-format=colorized \
                --disable=C0114,C0115,C0116 \
-               $(git ls-files '*.py' | grep -v 'tests/')
+               $(git ls-files '*.py' | grep -v 'tests/') > pylint_output.log  # Guarda resultados
         
-    - name: Upload results as artifact (optional)
+    - name: Upload results as artifact
       if: ${{ always() }}
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4  # Versión CORRECTA
       with:
         name: pylint-results-${{ matrix.python-version }}
         path: pylint_output.log
