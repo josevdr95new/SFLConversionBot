@@ -33,6 +33,9 @@ python -m sfl_bot.main
 4. BotFather will provide a token - save this for your `.env` file
 5. Configure additional bot settings like description and commands using BotFather
 
+### Bot Commands Preview
+![Bot Commands Preview](commands.png)
+
 ## Contributing 🤝
 
 Contributions welcome! Please feel free to submit a Pull Request.
