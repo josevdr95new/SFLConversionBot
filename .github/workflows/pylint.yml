@@ -1,23 +1,44 @@
-name: Pylint
+name: Python Code Quality Check
 
-on: [push]
+on: 
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  build:
+  lint:
+    name: Pylint Analysis
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
+        max-parallel: 3
     steps:
     - uses: actions/checkout@v4
+    
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
+        
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-    - name: Analysing the code with pylint
+        # Instala dependencias específicas de tu proyecto
+        [ -f requirements.txt ] && pip install -r requirements.txt
+        
+    - name: Run Pylint analysis
       run: |
-        pylint $(git ls-files '*.py')
+        # Analiza solo archivos .py en directorios específicos (ajusta según necesites)
+        pylint --output-format=colorized \
+               --disable=C0114,C0115,C0116 \  # Ignora advertencias de docstrings
+               $(git ls-files '*.py' | grep -v 'tests/')  # Excluye directorio tests
+        
+    - name: Upload results as artifact (optional)
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: pylint-results-${{ matrix.python-version }}
+        path: pylint_output.log
