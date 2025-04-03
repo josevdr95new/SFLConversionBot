@@ -11,13 +11,18 @@ from datetime import datetime
 class Handlers(PriceBot):
     def format_decimal(self, value: Decimal) -> str:
         """Formatea valores decimales mostrando:
-        - 8 decimales si hay ceros iniciales
-        - 4 decimales si no hay ceros iniciales"""
-        value_str = f"{value:.6f}"
-        if value < 0.1:
-            return value_str
+        - 8 decimales si el valor es < 0.1
+        - 4 decimales si el valor es >= 0.1
+        Elimina ceros redundantes al final"""
+        if value < Decimal('0.1'):
+            formatted = f"{value:.8f}"
         else:
-            return f"{value:.2f}"
+            formatted = f"{value:.4f}"
+        
+        # Eliminar ceros innecesarios después del punto decimal
+        if '.' in formatted:
+            formatted = formatted.rstrip('0').rstrip('.')
+        return formatted
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
