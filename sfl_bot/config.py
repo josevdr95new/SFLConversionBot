@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 # Initial configuration
 load_dotenv()
 getcontext().prec = 12
-locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+locale.setlocale(locale.LC_ALL, '')
 
 # API Constants
 PRICES_API_URL = "https://sfl.world/api/v1/prices"
