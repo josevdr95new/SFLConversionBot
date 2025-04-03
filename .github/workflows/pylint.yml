@@ -13,7 +13,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.8", "3.9", "3.10"]
-        max-parallel: 3
+      max-parallel: 3  # CORRECCIÓN: Fuera del bloque matrix
     steps:
     - uses: actions/checkout@v4
     
@@ -26,15 +26,13 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install pylint
-        # Instala dependencias específicas de tu proyecto
         [ -f requirements.txt ] && pip install -r requirements.txt
         
     - name: Run Pylint analysis
       run: |
-        # Analiza solo archivos .py en directorios específicos (ajusta según necesites)
         pylint --output-format=colorized \
-               --disable=C0114,C0115,C0116 \  # Ignora advertencias de docstrings
-               $(git ls-files '*.py' | grep -v 'tests/')  # Excluye directorio tests
+               --disable=C0114,C0115,C0116 \
+               $(git ls-files '*.py' | grep -v 'tests/')
         
     - name: Upload results as artifact (optional)
       if: ${{ always() }}
