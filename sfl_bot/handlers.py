@@ -222,7 +222,7 @@ class Handlers(PriceBot):
 
             if command.lower() == "usd":
                 if amount is None:
-                    await self.send_message(update, "ℹ️ Example: /usd 0.00012345")
+                    await self.send_message(update, "ℹ️ Example: /usd 5.5")
                     return
                 await self.handle_usd_conversion(update, amount)
             elif command.lower() == "sfl":
