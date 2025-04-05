@@ -5,9 +5,9 @@ import signal
 import sys
 from aiohttp import web
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from sfl_bot.config import configure_logging
-from sfl_bot.handlers import Handlers
-from sfl_bot.web_health import start_web_server
+from .config import configure_logging
+from .handlers import Handlers
+from .web_health import start_web_server
 
 logger = configure_logging()
 
@@ -28,11 +28,16 @@ def setup_application() -> Application:
     ])
     
     application.add_error_handler(bot.error_handler)
+    
+    # Guardar referencia al bot
+    application.bot_instance = bot
     return application
 
 async def main() -> None:
     application = setup_application()
-    web_runner, web_site = await start_web_server()
+    
+    # Pasar la instancia del bot al servidor web
+    web_runner, web_site = await start_web_server(application.bot_instance)
     
     shutdown_event = asyncio.Event()
     
@@ -40,7 +45,6 @@ async def main() -> None:
         logger.info("Received shutdown signal")
         shutdown_event.set()
     
-    # Manejo de señales multiplataforma
     if sys.platform == "win32":
         signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
     else:
@@ -62,20 +66,16 @@ async def main() -> None:
     finally:
         logger.info("Starting graceful shutdown...")
         try:
-            # 1. Detener polling
             if application.updater.running:
                 await application.updater.stop()
             
-            # 2. Detener servidor web
             await web_site.stop()
             await web_runner.cleanup()
             
-            # 3. Apagar aplicación
             await application.stop()
             await application.shutdown()
             
-            # 4. Cerrar cliente HTTP
-            await application.bot.shutdown()
+            await application.bot_instance.shutdown()
             
         except Exception as shutdown_error:
             logger.error(f"Error during shutdown: {shutdown_error}", exc_info=True)
