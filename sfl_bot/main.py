@@ -1,11 +1,13 @@
 import os
 import logging
 import asyncio
+import signal
+import sys
 from aiohttp import web
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from sfl_bot.config import configure_logging
 from sfl_bot.handlers import Handlers
-from sfl_bot.web_health import start_web_server  # Servidor web separado
+from sfl_bot.web_health import start_web_server
 
 logger = configure_logging()
 
@@ -30,24 +32,55 @@ def setup_application() -> Application:
 
 async def main() -> None:
     application = setup_application()
-    web_runner, web_site = await start_web_server()  # Inicia servidor web desde web_health.py
+    web_runner, web_site = await start_web_server()
     
+    shutdown_event = asyncio.Event()
+    
+    def signal_handler():
+        logger.info("Received shutdown signal")
+        shutdown_event.set()
+    
+    # Manejo de señales multiplataforma
+    if sys.platform == "win32":
+        signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
+    else:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(sig, signal_handler)
+
     try:
         logger.info("Starting bot...")
         await application.initialize()
         await application.start()
-        await application.updater.start_polling()  # Modo polling (alternativa a webhooks)
+        await application.updater.start_polling()
         
-        # Mantener la ejecución activa
-        while True:
-            await asyncio.sleep(3600)
+        logger.info("Bot is now running. Press Ctrl+C to stop.")
+        await shutdown_event.wait()
+
+    except Exception as e:
+        logger.error(f"Critical error: {e}", exc_info=True)
+    finally:
+        logger.info("Starting graceful shutdown...")
+        try:
+            # 1. Detener polling
+            if application.updater.running:
+                await application.updater.stop()
             
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Shutting down...")
-        await web_site.stop()          # Detener servidor web
-        await web_runner.cleanup()     # Limpiar recursos
-        await application.stop()       # Detener bot de Telegram
-        await application.shutdown()   # Apagado final
+            # 2. Detener servidor web
+            await web_site.stop()
+            await web_runner.cleanup()
+            
+            # 3. Apagar aplicación
+            await application.stop()
+            await application.shutdown()
+            
+            # 4. Cerrar cliente HTTP
+            await application.bot.shutdown()
+            
+        except Exception as shutdown_error:
+            logger.error(f"Error during shutdown: {shutdown_error}", exc_info=True)
+        finally:
+            logger.info("Shutdown completed")
 
 if __name__ == "__main__":
     asyncio.run(main())
