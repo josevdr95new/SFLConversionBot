@@ -36,6 +36,20 @@ python -m sfl_bot.main
 ### Bot Commands Preview
 ![Bot Commands Preview](commands.png)
 
+## Health Monitoring 🩺
+
+The bot includes a health check endpoint to monitor its status and performance.
+
+**How to use the `/ping` endpoint:**
+
+1. Ensure the bot is running
+2. Make a GET request to the `/ping` endpoint using either:
+   - Web browser: `http://localhost:8000/ping`
+   - Command line:
+     ```bash
+     curl http://localhost:8000/ping
+     ```
+
 ## Contributing 🤝
 
 Contributions welcome! Please feel free to submit a Pull Request.
