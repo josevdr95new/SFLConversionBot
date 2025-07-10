@@ -1,8 +1,7 @@
 # SFL Conversion Bot 🤖
 
-##RUN RENDER
+## RUN RENDER
 https://github.com/josevdr95new/SFLConversionBot/tree/run_render
-t.me/sflinfop2p_bot
 
 Telegram bot for converting in-game items and currencies (SFL/USD) with real-time rates.
 
