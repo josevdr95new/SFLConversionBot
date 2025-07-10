@@ -2,31 +2,36 @@ import re
 import asyncio
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
-from telegram import Update, helpers
+from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 from httpx import HTTPStatusError
-from .config import MAX_INPUT_LENGTH, MARKET_FEE
+from .config import MAX_INPUT_LENGTH, MARKET_FEE, BOT_VERSION, DONATION_ADDRESS
 from .services import PriceBot
 from datetime import datetime
+
+def escape_markdown(text: str) -> str:
+    """Escapa todos los caracteres reservados de MarkdownV2"""
+    escape_chars = r'\_*[]()~`>#+-=|{}.!'
+    return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
 class Handlers(PriceBot):
     def __init__(self):
         super().__init__()
         self.command_count = 0
         self.error_stats = {
-            'api': 0,        # Errores de conexión con APIs externas
-            'input': 0,      # Errores de entrada inválida
-            'calculation': 0,# Errores en cálculos
-            'cache': 0,      # Errores de caché
-            'other': 0       # Otros errores no categorizados
+            'api': 0,
+            'input': 0,
+            'calculation': 0,
+            'cache': 0,
+            'other': 0
         }
         self.start_time = datetime.now()
 
     def format_decimal(self, value: Decimal) -> str:
-        """Formatea valores decimales mostrando:
-        - 8 decimales si el valor es < 0.1
-        - 4 decimales si el valor es >= 0.1
-        Elimina ceros redundantes al final"""
+        """Format decimal values showing:
+        - 8 decimals if value < 0.1
+        - 4 decimals if value >= 0.1
+        Removes trailing zeros"""
         if value < Decimal('0.1'):
             formatted = f"{value:.8f}"
         else:
@@ -38,9 +43,11 @@ class Handlers(PriceBot):
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
+            # Escapar automáticamente todo el texto Markdown
+            escaped_text = escape_markdown(text)
             await update.message.reply_text(
-                text,
-                parse_mode="Markdown",
+                escaped_text,
+                parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
         except Exception as e:
@@ -54,24 +61,30 @@ class Handlers(PriceBot):
             items_list = ", ".join(sorted(prices.keys()))
             
             welcome_msg = f"""
-🌟 *SFL Conversion Bot* 🌟
+🌟 SFL Conversion Bot v{BOT_VERSION} 🌟
 
-📌 *Available commands:*
+📌 Available commands:
 /start - Show this message
 /help - Detailed help
-`/<item>` ≈ Unit price
-`/<item> <amount>` ≈ Conversion with commission
-`/usd <amount>` ≈ Convert SFL to USD
-`/sfl <amount>` ≈ Convert USD to SFL
-`/status` ≈ Show cache status
+/<item> - Unit price
+/<item> <amount> - Conversion with commission
+/usd <amount> - Convert Flower to USD
+/flower <amount> - Convert USD to Flower
+/status - Show cache status
+/calc <expression> - Mathematical calculator
+/land <number> - Farm details (coming soon)
 
-🔹 *Examples:*
-/merino wool ≈ Price of Merino Wool
-/merino wool 5 ≈ Convert Merino Wool
-/usd 1.2345 ≈ Value of SFL
-/sfl 10.5678 ≈ Value of USD
+🔹 Examples:
+/merino wool - Price of Merino Wool
+/merino wool 5 - Convert Merino Wool
+/usd 1.2345 - Value of Flower
+/flower 10.5678 - Value of USD
+/calc (5+3)*2 - Calculate expression
 
-📦 *Available items:*
+💝 Donate to support development:
+{DONATION_ADDRESS}
+
+📦 Available items:
 {items_list}
 """
             await self.send_message(update, welcome_msg)
@@ -81,18 +94,25 @@ class Handlers(PriceBot):
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
-        help_msg = """
-🛠 *Complete Help*
+        help_msg = f"""
+🛠 Complete Help v{BOT_VERSION}
 
-📝 *Syntax:*
+📝 Syntax:
 - Items: Case-insensitive, spaces allowed
 - Amounts: Numbers with up to 8 decimals
 
-💡 *Examples:*
-/stone ≈ Unit price
-/stone 20 ≈ Conversion
-/usd 1.2345 ≈ Value in USD
-/sfl 10.5678 ≈ Value in SFL
+🧮 Calculator Command:
+/calc <expression> - Basic math operations
+Example: /calc (5+3)*2
+
+🌾 Farm Command (coming soon):
+/land <number> - Future farm features
+
+💡 Examples:
+/stone - Unit price
+/stone 20 - Conversion
+/usd 5.5 - Value in USD
+/flower 10.5 - Value in Flower
 """
         await self.send_message(update, help_msg)
 
@@ -107,13 +127,13 @@ class Handlers(PriceBot):
             exchange_ttl = (exchange_expiry - now).seconds if exchange_expiry else 0
             
             status_msg = f"""
-🔄 *System Status*
+🔄 System Status v{BOT_VERSION}
 
 📊 Prices cache:
-{'Valid' if prices_ttl > 0 else 'Expired'} (TTL: {max(0, prices_ttl)}s)
+{'✅ Valid' if prices_ttl > 0 else '❌ Expired'} (TTL: {max(0, prices_ttl)}s)
 
 💱 Exchange cache:
-{'Valid' if exchange_ttl > 0 else 'Expired'} (TTL: {max(0, exchange_ttl)}s)
+{'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} (TTL: {max(0, exchange_ttl)}s)
 """
             await self.send_message(update, status_msg)
         except Exception as e:
@@ -129,17 +149,17 @@ class Handlers(PriceBot):
                 return
 
             rates = await self.get_exchange_rates()
-            sfl_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
             
-            if sfl_rate <= 0:
+            if flower_rate <= 0:
                 self.error_stats['api'] += 1
                 await self.send_message(update, "❌ Invalid exchange rate")
                 return
             
-            usd_value = amount * sfl_rate
+            usd_value = amount * flower_rate
             msg = (
-                f"🌻 *{self.format_decimal(amount)} SFL* ≈ *${self.format_decimal(usd_value)} USD*\n"
-                f"📊 Current rate: 1 SFL ≈ ${self.format_decimal(sfl_rate)}"
+                f"🌻 {self.format_decimal(amount)} Flower ≈ ${self.format_decimal(usd_value)} USD\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
         except InvalidOperation:
@@ -152,7 +172,7 @@ class Handlers(PriceBot):
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error processing your request")
 
-    async def handle_sfl_conversion(self, update: Update, amount: Decimal) -> None:
+    async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
         try:
             if not await self.validate_amount(amount):
@@ -161,17 +181,17 @@ class Handlers(PriceBot):
                 return
 
             rates = await self.get_exchange_rates()
-            sfl_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
             
-            if sfl_rate <= 0:
+            if flower_rate <= 0:
                 self.error_stats['api'] += 1
                 await self.send_message(update, "❌ Invalid exchange rate")
                 return
             
-            sfl_value = amount / sfl_rate
+            flower_value = amount / flower_rate
             msg = (
-                f"💵 *${self.format_decimal(amount)} USD* ≈ *{self.format_decimal(sfl_value)} SFL*\n"
-                f"📊 Current rate: 1 SFL ≈ ${self.format_decimal(sfl_rate)}"
+                f"💵 ${self.format_decimal(amount)} USD ≈ {self.format_decimal(flower_value)} Flower\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
         except InvalidOperation:
@@ -199,12 +219,11 @@ class Handlers(PriceBot):
             
             if not item_key:
                 self.error_stats['input'] += 1
-                safe_name = helpers.escape_markdown(item_name, version=2)
-                await self.send_message(update, f"❌ Item '{safe_name}' not found")
+                await self.send_message(update, f"❌ Item '{item_name}' not found")
                 return
 
             price = prices[item_key]
-            sfl_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
 
             if amount:
                 if not await self.validate_amount(amount):
@@ -212,19 +231,20 @@ class Handlers(PriceBot):
                     await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
                     return
 
-                gross_sfl = amount * price
-                gross_usd = gross_sfl * sfl_rate
+                gross_flower = amount * price
+                gross_usd = gross_flower * flower_rate
                 fee = gross_usd * MARKET_FEE
                 net_usd = gross_usd - fee
                 
                 msg = (
-                    f"🪙 *{self.format_decimal(amount)} {item_key}* ≈ *{self.format_decimal(gross_sfl)} SFL*\n"
-                    f"💵 Gross value: ≈ *${self.format_decimal(gross_usd)}*\n"
-                    f"📉 Commission (10%): ≈ *-${self.format_decimal(fee)}*\n"
-                    f"🤑 Net received: ≈ *${self.format_decimal(net_usd)}*"
+                    f"📊 Unit Price: 1 {item_key} ≈ {self.format_decimal(price)} Flower\n"
+                    f"🪙 {self.format_decimal(amount)} {item_key} ≈ {self.format_decimal(gross_flower)} Flower\n"
+                    f"💵 Gross value: ≈ ${self.format_decimal(gross_usd)}\n"
+                    f"📉 Commission (10%): ≈ -${self.format_decimal(fee)}\n"
+                    f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
                 )
             else:
-                msg = f"📈 1 {item_key} ≈ *{self.format_decimal(price)} SFL* (≈ ${self.format_decimal(price * sfl_rate)} USD)"
+                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
 
             await self.send_message(update, msg)
         except InvalidOperation:
@@ -236,6 +256,44 @@ class Handlers(PriceBot):
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error processing your request")
+
+    async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        try:
+            expression = ' '.join(context.args)
+            if not expression:
+                await self.send_message(update, "ℹ️ Example: /calc (5+3)*2")
+                return
+            
+            # Safe evaluation with Decimal
+            try:
+                # Remove potential harmful characters
+                safe_expr = re.sub(r'[^\d\.\+\-\*\/\(\)]', '', expression)
+                result = eval(safe_expr, {"__builtins__": None}, {})
+                decimal_result = Decimal(str(result))
+            except Exception as e:
+                self.error_stats['calculation'] += 1
+                await self.send_message(update, "⚠️ Error evaluating expression")
+                return
+
+            formatted_result = self.format_decimal(decimal_result)
+            await self.send_message(update, f"🧮 {expression} = {formatted_result}")
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing calculation")
+
+    async def handle_land(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        try:
+            farm_id = ' '.join(context.args)
+            if not farm_id:
+                await self.send_message(update, "ℹ️ Example: /land 123")
+                return
+                
+            await self.send_message(update, f"🌾 Farm ID {farm_id} details coming soon!")
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing farm ID")
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -270,11 +328,11 @@ class Handlers(PriceBot):
                     await self.send_message(update, "ℹ️ Example: /usd 5.5")
                     return
                 await self.handle_usd_conversion(update, amount)
-            elif command.lower() == "sfl":
+            elif command.lower() == "flower":
                 if amount is None:
-                    await self.send_message(update, "ℹ️ Example: /sfl 1.2345")
+                    await self.send_message(update, "ℹ️ Example: /flower 1.2345")
                     return
-                await self.handle_sfl_conversion(update, amount)
+                await self.handle_flower_conversion(update, amount)
             else:
                 await self.handle_item_conversion(update, command, amount)
 
