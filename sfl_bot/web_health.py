@@ -1,7 +1,7 @@
 import logging
 from aiohttp import web
 from datetime import datetime
-from .config import configure_logging
+from .config import configure_logging, BOT_VERSION
 
 logger = configure_logging()
 
@@ -14,7 +14,10 @@ async def handle_ping(request: web.Request) -> web.Response:
                 status=200
             )
 
-        status_info = ["🏓 Estado del Bot"]
+        status_info = ["🏓 Bot Status"]
+        
+        # Version information
+        status_info.append(f"ℹ️ Version: {BOT_VERSION}")
         
         # Tiempo de actividad
         if hasattr(bot, 'start_time'):
@@ -29,39 +32,39 @@ async def handle_ping(request: web.Request) -> web.Response:
             # Caché de precios
             prices_expiry = getattr(bot, "_get_prices_expiry", None)
             prices_ttl = (prices_expiry - now).total_seconds() if prices_expiry else 0
-            prices_status = "🟢 ACTIVA" if prices_ttl > 0 else "🔴 INACTIVA"
-            cache_info.append(f"📊 Precios: {prices_status} (TTL: {max(0, int(prices_ttl))}s)")
+            prices_status = "🟢 ACTIVE" if prices_ttl > 0 else "🔴 INACTIVE"
+            cache_info.append(f"📊 Prices: {prices_status} (TTL: {max(0, int(prices_ttl))}s)")
             
             # Caché de exchange
             exchange_expiry = getattr(bot, "_get_exchange_rates_expiry", None)
             exchange_ttl = (exchange_expiry - now).total_seconds() if exchange_expiry else 0
-            exchange_status = "🟢 ACTIVA" if exchange_ttl > 0 else "🔴 INACTIVA"
+            exchange_status = "🟢 ACTIVE" if exchange_ttl > 0 else "🔴 INACTIVE"
             cache_info.append(f"💱 Exchange: {exchange_status} (TTL: {max(0, int(exchange_ttl))}s)")
             
             if cache_info:
-                status_info.append("\n💾 Estado de la Caché:")
+                status_info.append("\n💾 Cache Status:")
                 status_info.extend(cache_info)
         except Exception as e:
             logger.warning(f"Error checking cache status: {e}")
-            status_info.append("\n⚠️ No se pudo verificar el estado de la caché")
+            status_info.append("\n⚠️ Could not verify cache status")
 
         # Estadísticas de comandos
         if hasattr(bot, 'command_count'):
-            status_info.append(f"\n📈 Comandos procesados: {bot.command_count}")
+            status_info.append(f"\n📈 Commands processed: {bot.command_count}")
 
         # Estadísticas de errores
         if hasattr(bot, 'error_stats'):
             error_stats = bot.error_stats
             total_errors = sum(error_stats.values())
-            status_info.append(f"\n❌ Errores totales: {total_errors}")
+            status_info.append(f"\n❌ Total errors: {total_errors}")
             
             if total_errors > 0:
-                status_info.append("\n🔍 Desglose de errores:")
+                status_info.append("\n🔍 Error breakdown:")
                 status_info.append(f"• API: {error_stats.get('api', 0)}")
-                status_info.append(f"• Entrada: {error_stats.get('input', 0)}")
-                status_info.append(f"• Cálculos: {error_stats.get('calculation', 0)}")
-                status_info.append(f"• Caché: {error_stats.get('cache', 0)}")
-                status_info.append(f"• Otros: {error_stats.get('other', 0)}")
+                status_info.append(f"• Input: {error_stats.get('input', 0)}")
+                status_info.append(f"• Calculations: {error_stats.get('calculation', 0)}")
+                status_info.append(f"• Cache: {error_stats.get('cache', 0)}")
+                status_info.append(f"• Others: {error_stats.get('other', 0)}")
 
         return web.Response(
             text="\n".join(status_info),
@@ -70,9 +73,9 @@ async def handle_ping(request: web.Request) -> web.Response:
         )
 
     except Exception as e:
-        logger.error(f"Error en ping endpoint: {str(e)}", exc_info=True)
+        logger.error(f"Error in ping endpoint: {str(e)}", exc_info=True)
         return web.Response(
-            text="🏓 pong\n⚠️ Error obteniendo estado completo del bot",
+            text="🏓 pong\n⚠️ Error getting full bot status",
             status=500
         )
 
@@ -93,6 +96,6 @@ async def start_web_server(bot, port: int = 8000) -> tuple[web.AppRunner, web.TC
     )
     
     await site.start()
-    logger.info(f"✅ Servidor web iniciado en puerto {port}")
+    logger.info(f"✅ Web server started on port {port}")
     
     return runner, site
