@@ -2,10 +2,6 @@
 
 Telegram bot for converting in-game items and currencies (SFL/USD) with real-time rates.
 
-## RUN RENDER
-https://github.com/josevdr95new/SFLConversionBot/tree/run_render
-
-
 ## Requirements 📋
 - Python 3.7+
 - Telegram bot token ([Get from @BotFather](https://t.me/BotFather))
