@@ -54,6 +54,22 @@ class Handlers(PriceBot):
             import logging
             logging.error(f"Error sending message: {e}")
 
+    async def send_advertisement(self, update: Update) -> None:
+        """Envía el mensaje publicitario"""
+        ad_text = (
+            "🌟 *Please support the project by visiting and cleaning my farm!* 🌾\n"
+            "[Visit Farm Now](https://sunflower-land.com/play/#/visit/30911)"
+        )
+        try:
+            await update.message.reply_text(
+                ad_text,
+                parse_mode="MarkdownV2",
+                disable_web_page_preview=False
+            )
+        except Exception as e:
+            import logging
+            logging.error(f"Error sending advertisement: {e}")
+
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         try:
@@ -88,6 +104,7 @@ class Handlers(PriceBot):
 {items_list}
 """
             await self.send_message(update, welcome_msg)
+            await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error showing available items")
@@ -115,6 +132,7 @@ Example: /calc (5+3)*2
 /flower 10.5 - Value in Flower
 """
         await self.send_message(update, help_msg)
+        await self.send_advertisement(update)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -136,6 +154,7 @@ Example: /calc (5+3)*2
 {'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} (TTL: {max(0, exchange_ttl)}s)
 """
             await self.send_message(update, status_msg)
+            await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['cache'] += 1
             await self.send_message(update, "❌ Error checking system status")
@@ -162,6 +181,7 @@ Example: /calc (5+3)*2
                 f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
+            await self.send_advertisement(update)
         except InvalidOperation:
             self.error_stats['input'] += 1
             await self.send_message(update, "⚠️ Invalid amount format")
@@ -194,6 +214,7 @@ Example: /calc (5+3)*2
                 f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
+            await self.send_advertisement(update)
         except InvalidOperation:
             self.error_stats['input'] += 1
             await self.send_message(update, "⚠️ Invalid amount format")
@@ -247,6 +268,7 @@ Example: /calc (5+3)*2
                 msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
 
             await self.send_message(update, msg)
+            await self.send_advertisement(update)
         except InvalidOperation:
             self.error_stats['input'] += 1
             await self.send_message(update, "⚠️ Invalid amount format")
@@ -278,6 +300,7 @@ Example: /calc (5+3)*2
 
             formatted_result = self.format_decimal(decimal_result)
             await self.send_message(update, f"🧮 {expression} = {formatted_result}")
+            await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error processing calculation")
@@ -291,6 +314,7 @@ Example: /calc (5+3)*2
                 return
                 
             await self.send_message(update, f"🌾 Farm ID {farm_id} details coming soon!")
+            await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error processing farm ID")
