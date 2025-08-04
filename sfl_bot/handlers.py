@@ -56,34 +56,36 @@ class Handlers(PriceBot):
             logging.error(f"Error sending message: {e}")
 
     async def send_advertisement(self, update: Update) -> None:
-        """Envía el mensaje publicitario de manera más confiable"""
+        """Envía el mensaje publicitario en inglés y español"""
         chat_id = update.message.chat_id
         
-        # Mostrar anuncio máximo 1 vez cada 5 comandos por chat
+        # Mostrar anuncio máximo 1 vez cada 3 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 5 != 0:
+        if ad_count > 0 and ad_count % 3 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
         self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
-            # Primero enviar un separador visual
+            # Separador visual
             await update.message.reply_text(
                 "══════════════════",
                 parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
             
-            # Mensaje principal de publicidad
+            # Mensaje bilingüe
             ad_text = (
+                "🌟 *Please support the project by cleaning and following my farm\!* 🌾\n"
+                "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)\n\n"
                 "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\!* 🌾\n"
                 "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
             )
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=False
+                disable_web_page_preview=True  # Vista previa desactivada
             )
         except Exception as e:
             import logging
