@@ -27,10 +27,10 @@ class Handlers(PriceBot):
         }
         self.start_time = datetime.now()
         self.ad_text = (
-            "You can clean my farm please (Puedes limpiar mi granja por favor)\n"
-            "https://sunflower-land.com/play/#/visit/30911"
+            "✨ You can clean my farm please ✨\n"
+            "(Puedes limpiar mi granja por favor)\n"
+            "👉 [Visit Farm](https://sunflower-land.com/play/#/visit/30911)"
         )
-        self.escaped_ad = escape_markdown(self.ad_text)
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -48,13 +48,16 @@ class Handlers(PriceBot):
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
-            # Combinar texto principal con publicidad
-            full_text = f"{text}\n\n{self.escaped_ad}"
-            # Escapar todo el texto Markdown
-            escaped_full_text = escape_markdown(full_text)
+            # Construir el mensaje completo con recuadro de publicidad
+            full_text = (
+                f"{text}\n\n"
+                "────────────────\n"
+                f"{self.ad_text}\n"
+                "────────────────"
+            )
             
             await update.message.reply_text(
-                escaped_full_text,
+                full_text,
                 parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
