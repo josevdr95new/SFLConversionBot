@@ -1,6 +1,5 @@
 import re
 import asyncio
-import logging
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
 from telegram import Update
@@ -11,7 +10,7 @@ from .services import PriceBot
 from datetime import datetime
 
 def escape_markdown(text: str) -> str:
-    """Escape all MarkdownV2 reserved characters"""
+    """Escapa todos los caracteres reservados de MarkdownV2"""
     escape_chars = r'\_*[]()~`>#+-=|{}.!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
@@ -27,11 +26,6 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.ad_text = (
-            "✨ *You can clean my farm please* ✨\n"
-            "_(Puedes limpiar mi granja por favor)_\n"
-            "👉 [Visit Farm](https://sunflower-land.com/play/#/visit/30911)"
-        )
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -49,33 +43,16 @@ class Handlers(PriceBot):
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
-            # Build complete message with advertising
-            full_text = (
-                f"{escape_markdown(text)}\n\n"
-                "────────────────\n"
-                f"{self.ad_text}\n"
-                "────────────────"
-            )
-            
+            # Escapar automáticamente todo el texto Markdown
+            escaped_text = escape_markdown(text)
             await update.message.reply_text(
-                full_text,
+                escaped_text,
                 parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
         except Exception as e:
+            import logging
             logging.error(f"Error sending message: {e}")
-            # Fallback without Markdown
-            try:
-                await update.message.reply_text(
-                    f"{text}\n\n------\n"
-                    "✨ You can clean my farm please ✨\n"
-                    "(Puedes limpiar mi granja por favor)\n"
-                    "Visit: https://sunflower-land.com/play/#/visit/30911\n"
-                    "------",
-                    disable_web_page_preview=True
-                )
-            except Exception as fallback_error:
-                logging.error(f"Fallback message failed: {fallback_error}")
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -375,17 +352,7 @@ Example: /calc (5+3)*2
             self.error_stats['other'] += 1
 
         if isinstance(update, Update) and update.message:
-            try:
-                await self.send_message(update, "⚠️ Internal error. Please try again.")
-            except Exception as e:
-                logging.error(f"Error handler failed: {e}")
-                try:
-                    await update.message.reply_text(
-                        "⚠️ Error occurred. Please try again later.",
-                        disable_web_page_preview=True
-                    )
-                except Exception as last_error:
-                    logging.error(f"Critical error handler failure: {last_error}")
+            await self.send_message(update, "⚠️ Internal error. Please try again.")
 
     async def shutdown(self) -> None:
         await self.http_client.aclose()
