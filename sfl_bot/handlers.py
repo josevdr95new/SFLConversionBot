@@ -10,7 +10,7 @@ from .services import PriceBot
 from datetime import datetime
 
 def escape_markdown(text: str) -> str:
-    """Escapes all MarkdownV2 reserved characters"""
+    """Escapa todos los caracteres reservados de MarkdownV2"""
     escape_chars = r'\_*[]()~`>#+-=|{}.!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
@@ -26,7 +26,7 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Dictionary to track ads per chat
+        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -44,6 +44,7 @@ class Handlers(PriceBot):
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
+            # Escapar automáticamente todo el texto Markdown
             escaped_text = escape_markdown(text)
             await update.message.reply_text(
                 escaped_text,
@@ -55,25 +56,30 @@ class Handlers(PriceBot):
             logging.error(f"Error sending message: {e}")
 
     async def send_advertisement(self, update: Update) -> None:
-        """Sends bilingual advertisement with farm link"""
+        """Envía el mensaje publicitario de manera más confiable"""
         chat_id = update.message.chat_id
         
-        # Show ad maximum once every 3 commands per chat
+        # Mostrar anuncio máximo 1 vez cada 5 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 3 != 0:
+        if ad_count > 0 and ad_count % 5 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
         self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
-            ad_text = (
-                "✨ *Support the project by visiting my farm!* 🌻\n"
-                "🔗 *Link:* https://sunflower-land.com/play/#/visit/30911\n\n"
-                "_¡Apoya el proyecto visitando mi granja!_ 🌾\n"
-                "_Enlace:_ https://sunflower-land.com/play/#/visit/30911"
+            # Primero enviar un separador visual
+            await update.message.reply_text(
+                "══════════════════",
+                parse_mode="MarkdownV2",
+                disable_web_page_preview=True
             )
             
+            # Mensaje principal de publicidad
+            ad_text = (
+                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\!* 🌾\n"
+                "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
+            )
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
@@ -302,6 +308,7 @@ Example: /calc (5+3)*2
             
             # Safe evaluation with Decimal
             try:
+                # Remove potential harmful characters
                 safe_expr = re.sub(r'[^\d\.\+\-\*\/\(\)]', '', expression)
                 result = eval(safe_expr, {"__builtins__": None}, {})
                 decimal_result = Decimal(str(result))
