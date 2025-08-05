@@ -376,7 +376,7 @@ Example: /land 123
                 f"🏜 Type: {land_type}\n"
                 f"📊 Level: {land_level}\n"
                 f"💰 Coins: {self.format_decimal(land_coins)}\n"
-                f"🌻 SFL Balance: {self.format_decimal(land_balance)}\n"
+                f"🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
                 f"\n"
                 f"👤 *Bumpkin*\n"
                 f"📊 Level: {bumpkin_level}\n"
