@@ -109,7 +109,7 @@ class Handlers(PriceBot):
 /flower <amount> - Convert USD to Flower
 /status - Show cache status
 /calc <expression> - Mathematical calculator
-/land <number> - Farm details (coming soon)
+/land <number> - Farm details
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -117,6 +117,7 @@ class Handlers(PriceBot):
 /usd 1.2345 - Value of Flower
 /flower 10.5678 - Value of USD
 /calc (5+3)*2 - Calculate expression
+/land 123 - Farm details
 
 💝 Donate to support development:
 {DONATION_ADDRESS}
@@ -143,8 +144,9 @@ class Handlers(PriceBot):
 /calc <expression> - Basic math operations
 Example: /calc (5+3)*2
 
-🌾 Farm Command (coming soon):
-/land <number> - Future farm features
+🌾 Farm Command:
+/land <number> - Show farm details
+Example: /land 123
 
 💡 Examples:
 /stone - Unit price
@@ -329,16 +331,69 @@ Example: /calc (5+3)*2
     async def handle_land(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         try:
-            farm_id = ' '.join(context.args)
-            if not farm_id:
-                await self.send_message(update, "ℹ️ Example: /land 123")
+            if not context.args:
+                await self.send_message(update, "ℹ️ Please specify a farm ID. Example: /land 123")
                 return
-                
-            await self.send_message(update, f"🌾 Farm ID {farm_id} details coming soon!")
+
+            land_id_str = context.args[0].strip()
+            try:
+                land_id = int(land_id_str)
+                if land_id <= 0:
+                    raise ValueError("ID must be positive")
+            except ValueError:
+                self.error_stats['input'] += 1
+                await self.send_message(update, "⚠️ Invalid ID. Must be a positive integer.")
+                return
+
+            # Get data from API
+            data = await self.get_land_data(land_id)
+            
+            # Process land data
+            land_info = data.get('land', {})
+            bumpkin_info = data.get('bumpkin', {})
+            
+            if not land_info:
+                await self.send_message(update, f"❌ Farm ID {land_id} not found")
+                return
+
+            # Format land information
+            land_type = land_info.get('type', 'unknown').capitalize()
+            land_level = land_info.get('level', 0)
+            land_coins = Decimal(str(land_info.get('coins', 0)))
+            land_balance = Decimal(str(land_info.get('balance', 0)))
+            
+            # Format Bumpkin information
+            bumpkin_level = bumpkin_info.get('level', 0)
+            bumpkin_exp = Decimal(str(bumpkin_info.get('experience', 0)))
+            
+            # Count skills
+            skills = bumpkin_info.get('skills', {})
+            total_skills = len(skills) if skills else 0
+            
+            # Build message
+            message = (
+                f"🌾 *Farm ID: {land_id}*\n"
+                f"🏜 Type: {land_type}\n"
+                f"📊 Level: {land_level}\n"
+                f"💰 Coins: {self.format_decimal(land_coins)}\n"
+                f"🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
+                f"\n"
+                f"👤 *Bumpkin*\n"
+                f"📊 Level: {bumpkin_level}\n"
+                f"🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
+                f"🎯 Skills: {total_skills}"
+            )
+            
+            await self.send_message(update, message)
             await self.send_advertisement(update)
+
         except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing farm ID")
+            self.error_stats['api'] += 1
+            error_msg = (
+                f"❌ Error fetching farm data:\n"
+                f"{str(e)[:100]}"
+            )
+            await self.send_message(update, error_msg)
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
