@@ -11,7 +11,7 @@ from datetime import datetime
 
 def escape_markdown(text: str) -> str:
     """Escapa todos los caracteres reservados de MarkdownV2"""
-    escape_chars = r'\_[]()~`>#+-=|{}.!'
+    escape_chars = r'\_*[]()~`>#+-=|{}.!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
 class Handlers(PriceBot):
