@@ -1,5 +1,6 @@
 import re
 import asyncio
+import logging
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
 from telegram import Update
@@ -8,6 +9,8 @@ from httpx import HTTPStatusError
 from .config import MAX_INPUT_LENGTH, MARKET_FEE, BOT_VERSION, DONATION_ADDRESS
 from .services import PriceBot
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 def escape_markdown(text: str) -> str:
     """Escapa todos los caracteres reservados de MarkdownV2"""
@@ -30,9 +33,9 @@ class Handlers(PriceBot):
         
         # Configuración específica para Oil
         self.oil_drill_components = {
-            "Wood": 20,
-            "Iron": 9,
-            "Leather": 10
+            "wood": 20,
+            "iron": 9,
+            "leather": 10
         }
         self.oil_production = [10, 10, 30]  # Producción por cada taladro
         self.oil_drills_needed = 3  # Cantidad de taladros necesarios para la producción completa
@@ -61,16 +64,16 @@ class Handlers(PriceBot):
                 disable_web_page_preview=True
             )
         except Exception as e:
-            import logging
-            logging.error(f"Error sending message: {e}")
+            logger.error(f"Error sending message: {e}")
 
     async def get_prices(self):
         """Obtiene precios y añade Oil calculado"""
         prices = await super().get_prices()
         
-        # Calcular precio del petróleo si tenemos los materiales necesarios
-        if all(item in prices for item in self.oil_drill_components):
-            try:
+        # Añadir Oil manualmente aunque falten componentes
+        try:
+            # Verificar si tenemos todos los componentes
+            if all(item in prices for item in self.oil_drill_components):
                 # Calcular costo total de los 3 taladros
                 drill_cost = sum(
                     Decimal(qty) * prices[item] * Decimal(self.oil_drills_needed)
@@ -83,9 +86,13 @@ class Handlers(PriceBot):
                 # Calcular precio por unidad de petróleo
                 oil_price = drill_cost / Decimal(total_oil)
                 prices["Oil"] = oil_price
-            except (TypeError, InvalidOperation, DecimalException):
-                # Si hay error en el cálculo, no añadimos el precio
-                pass
+            else:
+                # Añadir Oil con precio 0 si faltan componentes
+                prices["Oil"] = Decimal('0')
+        except (TypeError, InvalidOperation, DecimalException) as e:
+            logger.error(f"Error calculando precio de Oil: {e}")
+            # Añadir Oil con precio 0 si hay error en el cálculo
+            prices["Oil"] = Decimal('0')
         
         return prices
 
@@ -122,8 +129,7 @@ class Handlers(PriceBot):
                 disable_web_page_preview=True
             )
         except Exception as e:
-            import logging
-            logging.error(f"Error sending advertisement: {e}")
+            logger.error(f"Error sending advertisement: {e}")
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -313,6 +319,11 @@ Oil price is calculated based on drill components:
             price = prices[item_key]
             flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
 
+            # Manejar caso especial para Oil con precio 0
+            if item_key == "Oil" and price == 0:
+                await self.send_message(update, "⚠️ Oil price currently unavailable. Missing components: Wood, Iron, Leather")
+                return
+
             if amount:
                 if not await self.validate_amount(amount):
                     self.error_stats['input'] += 1
@@ -490,13 +501,4 @@ Oil price is calculated based on drill components:
             self.error_stats['api'] += 1
         elif isinstance(error, (InvalidOperation, ValueError)):
             self.error_stats['input'] += 1
-        elif isinstance(error, (DecimalException, ZeroDivisionError)):
-            self.error_stats['calculation'] += 1
-        else:
-            self.error_stats['other'] += 1
-
-        if isinstance(update, Update) and update.message:
-            await self.send_message(update, "⚠️ Internal error. Please try again.")
-
-    async def shutdown(self) -> None:
-        await self.http_client.aclose()
+        elif isinstance(error, (DecimalException, ZeroDivisi
