@@ -27,6 +27,15 @@ class Handlers(PriceBot):
         }
         self.start_time = datetime.now()
         self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
+        
+        # Configuración específica para Oil
+        self.oil_drill_components = {
+            "Wood": 20,
+            "Iron": 9,
+            "Leather": 10
+        }
+        self.oil_production = [10, 10, 30]  # Producción por cada taladro
+        self.oil_drills_needed = 3  # Cantidad de taladros necesarios para la producción completa
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -54,6 +63,31 @@ class Handlers(PriceBot):
         except Exception as e:
             import logging
             logging.error(f"Error sending message: {e}")
+
+    async def get_prices(self):
+        """Obtiene precios y añade Oil calculado"""
+        prices = await super().get_prices()
+        
+        # Calcular precio del petróleo si tenemos los materiales necesarios
+        if all(item in prices for item in self.oil_drill_components):
+            try:
+                # Calcular costo total de los 3 taladros
+                drill_cost = sum(
+                    Decimal(qty) * prices[item] * Decimal(self.oil_drills_needed)
+                    for item, qty in self.oil_drill_components.items()
+                )
+                
+                # Calcular producción total de petróleo (10 + 10 + 30 = 50)
+                total_oil = sum(self.oil_production)
+                
+                # Calcular precio por unidad de petróleo
+                oil_price = drill_cost / Decimal(total_oil)
+                prices["Oil"] = oil_price
+            except (TypeError, InvalidOperation, DecimalException):
+                # Si hay error en el cálculo, no añadimos el precio
+                pass
+        
+        return prices
 
     async def send_advertisement(self, update: Update) -> None:
         """Envía el mensaje publicitario en inglés y español"""
@@ -85,7 +119,7 @@ class Handlers(PriceBot):
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True  # Vista previa desactivada
+                disable_web_page_preview=True
             )
         except Exception as e:
             import logging
@@ -118,6 +152,8 @@ class Handlers(PriceBot):
 /flower 10.5678 - Value of USD
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
+/oil - Price of Oil (calculated from drill components)
+/oil 100 - Convert Oil to Flower/USD
 
 💝 Donate to support development:
 {DONATION_ADDRESS}
@@ -148,11 +184,19 @@ Example: /calc (5+3)*2
 /land <number> - Show farm details
 Example: /land 123
 
+🛢 Oil Calculation:
+Oil price is calculated based on drill components:
+- 3 Oil Drills required (60 Wood + 27 Iron + 30 Leather)
+- Production: 10, 10, 30 Oil (total 50)
+- Price per Oil = Total drill cost / 50
+
 💡 Examples:
 /stone - Unit price
 /stone 20 - Conversion
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
+/oil - Price of Oil
+/oil 500 - Convert Oil
 """
         await self.send_message(update, help_msg)
         await self.send_advertisement(update)
