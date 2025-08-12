@@ -10,7 +10,7 @@ from .services import PriceBot
 from datetime import datetime
 
 def escape_markdown(text: str) -> str:
-    """Escapa todos los caracteres reservados de MarkdownV2"""
+    """Escape all MarkdownV2 reserved characters"""
     escape_chars = r'\_*[]()~`>#+-=|{}.!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
@@ -26,7 +26,7 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
+        self.advertisement_shown = {}  # Dictionary to track ads per chat
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -44,7 +44,6 @@ class Handlers(PriceBot):
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
-            # Escapar automáticamente todo el texto Markdown
             escaped_text = escape_markdown(text)
             await update.message.reply_text(
                 escaped_text,
@@ -52,43 +51,36 @@ class Handlers(PriceBot):
                 disable_web_page_preview=True
             )
         except Exception as e:
-            import logging
             logging.error(f"Error sending message: {e}")
 
     async def send_advertisement(self, update: Update) -> None:
-        """Envía el mensaje publicitario en inglés y español"""
+        """Send advertisement message in English"""
         chat_id = update.message.chat_id
         
-        # Mostrar anuncio máximo 1 vez cada 3 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 3 != 0:
+        if ad_count > 0 and ad_count % 10 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
         self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
-            # Separador visual
             await update.message.reply_text(
                 "══════════════════",
                 parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
             
-            # Mensaje bilingüe
             ad_text = (
                 "🌟 *Please support the project by cleaning and following my farm\!* 🌾\n"
-                "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)\n\n"
-                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\!* 🌾\n"
-                "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
+                "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)"
             )
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True  # Vista previa desactivada
+                disable_web_page_preview=True
             )
         except Exception as e:
-            import logging
             logging.error(f"Error sending advertisement: {e}")
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -316,9 +308,7 @@ Example: /land 123
                 await self.send_message(update, "ℹ️ Example: /calc (5+3)*2")
                 return
             
-            # Safe evaluation with Decimal
             try:
-                # Remove potential harmful characters
                 safe_expr = re.sub(r'[^\d\.\+\-\*\/\(\)]', '', expression)
                 result = eval(safe_expr, {"__builtins__": None}, {})
                 decimal_result = Decimal(str(result))
@@ -351,10 +341,7 @@ Example: /land 123
                 await self.send_message(update, "⚠️ Invalid ID. Must be a positive integer.")
                 return
 
-            # Get data from API
             data = await self.get_land_data(land_id)
-            
-            # Process land data
             land_info = data.get('land', {})
             bumpkin_info = data.get('bumpkin', {})
             
@@ -362,21 +349,17 @@ Example: /land 123
                 await self.send_message(update, f"❌ Farm ID {land_id} not found")
                 return
 
-            # Format land information
             land_type = land_info.get('type', 'unknown').capitalize()
             land_level = land_info.get('level', 0)
             land_coins = Decimal(str(land_info.get('coins', 0)))
             land_balance = Decimal(str(land_info.get('balance', 0)))
             
-            # Format Bumpkin information
             bumpkin_level = bumpkin_info.get('level', 0)
             bumpkin_exp = Decimal(str(bumpkin_info.get('experience', 0)))
             
-            # Count skills
             skills = bumpkin_info.get('skills', {})
             total_skills = len(skills) if skills else 0
             
-            # Build message
             message = (
                 f"🌾 *Farm ID: {land_id}*\n"
                 f"🏜 Type: {land_type}\n"
@@ -395,10 +378,7 @@ Example: /land 123
 
         except Exception as e:
             self.error_stats['api'] += 1
-            error_msg = (
-                f"❌ Error fetching farm data:\n"
-                f"{str(e)[:100]}"
-            )
+            error_msg = f"❌ Error fetching farm data:\n{str(e)[:100]}"
             await self.send_message(update, error_msg)
 
     async def handle_auw(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -406,10 +386,9 @@ Example: /land 123
         try:
             prices = await self.get_prices()
             if not prices:
-                await self.send_message(update, "❌ No hay datos de precios disponibles")
+                await self.send_message(update, "❌ No price data available")
                 return
 
-            # Agrupar items por categoría (primera letra)
             categorized = {}
             for item, price in prices.items():
                 first_letter = item[0].upper()
@@ -417,30 +396,23 @@ Example: /land 123
                     categorized[first_letter] = []
                 categorized[first_letter].append((item, price))
 
-            # Construir mensaje con formato organizado
-            message_lines = ["🌟 *PRECIOS DE TODOS LOS OBJETOS* 🌟\n"]
+            message_lines = ["🌟 *ALL ITEM PRICES* 🌟\n"]
             
             for letter, items in sorted(categorized.items()):
-                # Encabezado de categoría
                 message_lines.append(f"\n🔹 *{letter}* 🔹")
                 
-                # Items en columnas
                 chunk_size = 3
                 for i in range(0, len(items), chunk_size):
                     chunk = items[i:i+chunk_size]
                     line = []
                     
                     for item, price in chunk:
-                        # Formatear nombre (Merino Wool -> Merino)
                         display_name = item.replace('_', ' ').title().split()[0]
-                        line.append(
-                            f"{display_name}: `{self.format_decimal(price)}`"
-                        )
+                        line.append(f"{display_name}: `{self.format_decimal(price)}`")
                     
                     message_lines.append(" • ".join(line))
 
-            # Añadir separador final
-            message_lines.append("\n💡 *Nota:* Precios en Flower")
+            message_lines.append("\n💡 *Note:* Prices in Flower")
             full_message = "\n".join(message_lines)
 
             await self.send_message(update, full_message)
@@ -448,7 +420,7 @@ Example: /land 123
             
         except Exception as e:
             self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error generando la lista de precios")
+            await self.send_message(update, "❌ Error generating price list")
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -502,4 +474,14 @@ Example: /land 123
         if isinstance(error, HTTPStatusError):
             self.error_stats['api'] += 1
         elif isinstance(error, (InvalidOperation, ValueError)):
-            self.error_stat
+            self.error_stats['input'] += 1
+        elif isinstance(error, (DecimalException, ZeroDivisionError)):
+            self.error_stats['calculation'] += 1
+        else:
+            self.error_stats['other'] += 1
+
+        if isinstance(update, Update) and update.message:
+            await self.send_message(update, "⚠️ Internal error. Please try again.")
+
+    async def shutdown(self) -> None:
+        await self.http_client.aclose()
