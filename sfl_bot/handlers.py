@@ -1,5 +1,6 @@
 import re
 import asyncio
+import logging
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
 from telegram import Update
@@ -26,7 +27,7 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Dictionary to track ads per chat
+        self.advertisement_shown = {}
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -54,7 +55,7 @@ class Handlers(PriceBot):
             logging.error(f"Error sending message: {e}")
 
     async def send_advertisement(self, update: Update) -> None:
-        """Send advertisement message in English"""
+        """Send advertisement message"""
         chat_id = update.message.chat_id
         
         ad_count = self.advertisement_shown.get(chat_id, 0)
@@ -143,7 +144,7 @@ Example: /calc (5+3)*2
 Example: /land 123
 
 📊 All Prices Command:
-/auw - Show all item prices in a beautiful table
+/auw - Show all item prices in clean format
 
 💡 Examples:
 /stone - Unit price
@@ -389,45 +390,35 @@ Example: /land 123
                 await self.send_message(update, "❌ No price data available")
                 return
 
-            # Build a beautiful table format
-            table_lines = []
+            # Build clean list format
+            message_lines = [
+                "════════════════════════════",
+                "🌟 *ALL ITEM PRICES* 🌟",
+                "════════════════════════════",
+                ""
+            ]
             
-            # Create table header
-            table_lines.append("🌟 *ALL ITEM PRICES* 🌟")
-            table_lines.append("")
-            table_lines.append("┌───────────────────────────────┬───────────────┐")
-            table_lines.append("│ ITEM                          │ PRICE (SFL)   │")
-            table_lines.append("├───────────────────────────────┼───────────────┤")
-            
-            # Sort items by name
-            sorted_items = sorted(prices.items(), key=lambda x: x[0])
-            
-            # Add items to table
-            for item, price in sorted_items:
-                # Format item name (capitalize and remove underscores)
+            # Add each item with clear separation
+            for item, price in prices.items():
                 formatted_item = item.replace('_', ' ').title()
                 formatted_price = self.format_decimal(price)
                 
-                # Pad to fixed widths
-                item_padded = formatted_item.ljust(30)
-                price_padded = formatted_price.rjust(13)
-                
-                table_lines.append(f"│ {item_padded} │ {price_padded} │")
+                message_lines.append(f"▸ *{formatted_item}*")
+                message_lines.append(f"  Price: `{formatted_price} SFL`")
+                message_lines.append("─" * 30)
             
-            # Close table
-            table_lines.append("└───────────────────────────────┴───────────────┘")
-            table_lines.append("")
-            table_lines.append("💡 *Note:* Prices in Sunflower Land Flower (SFL)")
+            # Add final note
+            message_lines.append("💡 Prices in Sunflower Land Flower (SFL)")
             
             # Join all lines into a single message
-            full_message = "\n".join(table_lines)
+            full_message = "\n".join(message_lines)
             
             await self.send_message(update, full_message)
             await self.send_advertisement(update)
             
         except Exception as e:
             self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error generating price table")
+            await self.send_message(update, "❌ Error generating price list")
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
