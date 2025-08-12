@@ -110,6 +110,7 @@ class Handlers(PriceBot):
 /status - Show cache status
 /calc <expression> - Mathematical calculator
 /land <number> - Farm details
+/auw - Show all item prices
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -118,6 +119,7 @@ class Handlers(PriceBot):
 /flower 10.5678 - Value of USD
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
+/auw - All item prices
 
 💝 Donate to support development:
 {DONATION_ADDRESS}
@@ -148,11 +150,15 @@ Example: /calc (5+3)*2
 /land <number> - Show farm details
 Example: /land 123
 
+📊 All Prices Command:
+/auw - Show all item prices in a beautiful list
+
 💡 Examples:
 /stone - Unit price
 /stone 20 - Conversion
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
+/auw - All item prices
 """
         await self.send_message(update, help_msg)
         await self.send_advertisement(update)
@@ -395,6 +401,55 @@ Example: /land 123
             )
             await self.send_message(update, error_msg)
 
+    async def handle_auw(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        try:
+            prices = await self.get_prices()
+            if not prices:
+                await self.send_message(update, "❌ No hay datos de precios disponibles")
+                return
+
+            # Agrupar items por categoría (primera letra)
+            categorized = {}
+            for item, price in prices.items():
+                first_letter = item[0].upper()
+                if first_letter not in categorized:
+                    categorized[first_letter] = []
+                categorized[first_letter].append((item, price))
+
+            # Construir mensaje con formato organizado
+            message_lines = ["🌟 *PRECIOS DE TODOS LOS OBJETOS* 🌟\n"]
+            
+            for letter, items in sorted(categorized.items()):
+                # Encabezado de categoría
+                message_lines.append(f"\n🔹 *{letter}* 🔹")
+                
+                # Items en columnas
+                chunk_size = 3
+                for i in range(0, len(items), chunk_size):
+                    chunk = items[i:i+chunk_size]
+                    line = []
+                    
+                    for item, price in chunk:
+                        # Formatear nombre (Merino Wool -> Merino)
+                        display_name = item.replace('_', ' ').title().split()[0]
+                        line.append(
+                            f"{display_name}: `{self.format_decimal(price)}`"
+                        )
+                    
+                    message_lines.append(" • ".join(line))
+
+            # Añadir separador final
+            message_lines.append("\n💡 *Nota:* Precios en Flower")
+            full_message = "\n".join(message_lines)
+
+            await self.send_message(update, full_message)
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error generando la lista de precios")
+
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         if not update.message or not update.message.text:
@@ -433,6 +488,8 @@ Example: /land 123
                     await self.send_message(update, "ℹ️ Example: /flower 1.2345")
                     return
                 await self.handle_flower_conversion(update, amount)
+            elif command.lower() == "auw":
+                await self.handle_auw(update, context)
             else:
                 await self.handle_item_conversion(update, command, amount)
 
@@ -445,14 +502,4 @@ Example: /land 123
         if isinstance(error, HTTPStatusError):
             self.error_stats['api'] += 1
         elif isinstance(error, (InvalidOperation, ValueError)):
-            self.error_stats['input'] += 1
-        elif isinstance(error, (DecimalException, ZeroDivisionError)):
-            self.error_stats['calculation'] += 1
-        else:
-            self.error_stats['other'] += 1
-
-        if isinstance(update, Update) and update.message:
-            await self.send_message(update, "⚠️ Internal error. Please try again.")
-
-    async def shutdown(self) -> None:
-        await self.http_client.aclose()
+            self.error_stat
