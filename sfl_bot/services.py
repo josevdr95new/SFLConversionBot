@@ -53,5 +53,13 @@ class PriceBot:
                 return self._get_exchange_rates_cache
             raise Exception(f"Error getting exchange rates: {e}")
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1))
+    async def get_land_data(self, land_id: int) -> Dict[str, Any]:
+        url = f"https://sfl.world/api/v1.1/land/{land_id}"
+        try:
+            return await self.fetch_data(url)
+        except Exception as e:
+            raise Exception(f"Error fetching land data: {e}")
+
     async def validate_amount(self, amount: Decimal) -> bool:
         return amount >= Decimal('0.00000001')

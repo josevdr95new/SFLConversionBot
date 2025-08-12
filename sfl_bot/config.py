@@ -15,7 +15,7 @@ REQUEST_TIMEOUT = 5.0
 CACHE_TTL = int(os.getenv("CACHE_TTL", 300))
 MARKET_FEE = Decimal(os.getenv("MARKET_FEE", "0.10"))
 MAX_INPUT_LENGTH = 50
-BOT_VERSION = "1.2.4"
+BOT_VERSION = "1.3.3"
 DONATION_ADDRESS = "0xf3Beb26e58FAe01f1D75454062B5A4F6d1F14F5F"  # Reemplazar con dirección real
 
 def configure_logging():
