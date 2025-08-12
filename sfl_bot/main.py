@@ -18,7 +18,10 @@ def setup_application() -> Application:
         raise ValueError("Telegram token not provided")
 
     bot = Handlers()
-    application = Application.builder().token(token).post_shutdown(bot.shutdown).build()
+    application = Application.builder().token(token).build()
+    
+    # Store bot reference for manual shutdown
+    application.bot_instance = bot
     
     application.add_handlers([
         CommandHandler("start", bot.handle_start),
@@ -32,14 +35,12 @@ def setup_application() -> Application:
     
     application.add_error_handler(bot.error_handler)
     
-    # Guardar referencia al bot
-    application.bot_instance = bot
     return application
 
 async def main() -> None:
     application = setup_application()
     
-    # Pasar la instancia del bot al servidor web
+    # Pass bot instance to web server
     web_runner, web_site = await start_web_server(application.bot_instance)
     
     shutdown_event = asyncio.Event()
@@ -78,6 +79,7 @@ async def main() -> None:
             await application.stop()
             await application.shutdown()
             
+            # Manually close HTTP client
             await application.bot_instance.shutdown()
             
         except Exception as shutdown_error:
