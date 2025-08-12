@@ -43,11 +43,13 @@ class Handlers(PriceBot):
             formatted = formatted.rstrip('0').rstrip('.')
         return formatted
 
-    async def send_message(self, update: Update, text: str) -> None:
+    async def send_message(self, update: Update, text: str, escape: bool = True) -> None:
+        """Send message with optional Markdown escaping"""
         try:
-            escaped_text = escape_markdown(text)
+            if escape:
+                text = escape_markdown(text)
             await update.message.reply_text(
-                escaped_text,
+                text,
                 parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
@@ -390,7 +392,7 @@ Example: /land 123
                 await self.send_message(update, "❌ No price data available")
                 return
 
-            # Build clean list format
+            # Build clean list format without escaping
             message_lines = [
                 "════════════════════════════",
                 "🌟 *ALL ITEM PRICES* 🌟",
@@ -413,7 +415,8 @@ Example: /land 123
             # Join all lines into a single message
             full_message = "\n".join(message_lines)
             
-            await self.send_message(update, full_message)
+            # Send without escaping Markdown
+            await self.send_message(update, full_message, escape=False)
             await self.send_advertisement(update)
             
         except Exception as e:
