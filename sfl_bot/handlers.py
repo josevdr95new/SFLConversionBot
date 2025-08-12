@@ -58,7 +58,7 @@ class Handlers(PriceBot):
         chat_id = update.message.chat_id
         
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 10 != 0:
+        if ad_count > 0 and ad_count % 3 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
@@ -143,7 +143,7 @@ Example: /calc (5+3)*2
 Example: /land 123
 
 📊 All Prices Command:
-/auw - Show all item prices in a beautiful list
+/auw - Show all item prices in a beautiful table
 
 💡 Examples:
 /stone - Unit price
@@ -389,38 +389,45 @@ Example: /land 123
                 await self.send_message(update, "❌ No price data available")
                 return
 
-            categorized = {}
-            for item, price in prices.items():
-                first_letter = item[0].upper()
-                if first_letter not in categorized:
-                    categorized[first_letter] = []
-                categorized[first_letter].append((item, price))
-
-            message_lines = ["🌟 *ALL ITEM PRICES* 🌟\n"]
+            # Build a beautiful table format
+            table_lines = []
             
-            for letter, items in sorted(categorized.items()):
-                message_lines.append(f"\n🔹 *{letter}* 🔹")
+            # Create table header
+            table_lines.append("🌟 *ALL ITEM PRICES* 🌟")
+            table_lines.append("")
+            table_lines.append("┌───────────────────────────────┬───────────────┐")
+            table_lines.append("│ ITEM                          │ PRICE (SFL)   │")
+            table_lines.append("├───────────────────────────────┼───────────────┤")
+            
+            # Sort items by name
+            sorted_items = sorted(prices.items(), key=lambda x: x[0])
+            
+            # Add items to table
+            for item, price in sorted_items:
+                # Format item name (capitalize and remove underscores)
+                formatted_item = item.replace('_', ' ').title()
+                formatted_price = self.format_decimal(price)
                 
-                chunk_size = 3
-                for i in range(0, len(items), chunk_size):
-                    chunk = items[i:i+chunk_size]
-                    line = []
-                    
-                    for item, price in chunk:
-                        display_name = item.replace('_', ' ').title().split()[0]
-                        line.append(f"{display_name}: `{self.format_decimal(price)}`")
-                    
-                    message_lines.append(" • ".join(line))
-
-            message_lines.append("\n💡 *Note:* Prices in Flower")
-            full_message = "\n".join(message_lines)
-
+                # Pad to fixed widths
+                item_padded = formatted_item.ljust(30)
+                price_padded = formatted_price.rjust(13)
+                
+                table_lines.append(f"│ {item_padded} │ {price_padded} │")
+            
+            # Close table
+            table_lines.append("└───────────────────────────────┴───────────────┘")
+            table_lines.append("")
+            table_lines.append("💡 *Note:* Prices in Sunflower Land Flower (SFL)")
+            
+            # Join all lines into a single message
+            full_message = "\n".join(table_lines)
+            
             await self.send_message(update, full_message)
             await self.send_advertisement(update)
             
         except Exception as e:
             self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error generating price list")
+            await self.send_message(update, "❌ Error generating price table")
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
