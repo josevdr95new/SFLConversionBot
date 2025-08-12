@@ -26,7 +26,8 @@ def setup_application() -> Application:
         CommandHandler("status", bot.handle_status),
         CommandHandler("calc", bot.handle_calc),
         CommandHandler("land", bot.handle_land),
-        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|status|calc|land)$"), bot.handle_item)
+        CommandHandler("auw", bot.handle_auw),
+        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|status|calc|land|auw)$"), bot.handle_item)
     ])
     
     application.add_error_handler(bot.error_handler)
