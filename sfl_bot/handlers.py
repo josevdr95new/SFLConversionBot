@@ -59,9 +59,9 @@ class Handlers(PriceBot):
         """Envía el mensaje publicitario en inglés y español"""
         chat_id = update.message.chat_id
         
-        # Mostrar anuncio máximo 1 vez cada 3 comandos por chat
+        # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 3 != 0:
+        if ad_count > 0 and ad_count % 10 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
@@ -372,13 +372,13 @@ Example: /land 123
             
             # Build message
             message = (
-                f"🌾 *Farm ID: {land_id}*\n"
+                f"🌾 -Farm ID: {land_id}-\n"
                 f"🏜 Type: {land_type}\n"
                 f"📊 Expansion: {land_level}\n"
                 f"💰 Coins: {self.format_decimal(land_coins)}\n"
                 f"🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
                 f"\n"
-                f"👤 *Bumpkin*\n"
+                f"👤 -Bumpkin-\n"
                 f"📊 Level: {bumpkin_level}\n"
                 f"🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
                 f"🎯 Skills: {total_skills}"
