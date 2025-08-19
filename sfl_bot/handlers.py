@@ -496,4 +496,25 @@ Example: /oil
                     return
                 await self.handle_flower_conversion(update, amount)
             else:
-           
+                await self.handle_item_conversion(update, command, amount)
+
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing your request")
+
+    async def error_handler(self, update: object, context: CallbackContext) -> None:
+        error = context.error
+        if isinstance(error, HTTPStatusError):
+            self.error_stats['api'] += 1
+        elif isinstance(error, (InvalidOperation, ValueError)):
+            self.error_stats['input'] += 1
+        elif isinstance(error, (DecimalException, ZeroDivisionError)):
+            self.error_stats['calculation'] += 1
+        else:
+            self.error_stats['other'] += 1
+
+        if isinstance(update, Update) and update.message:
+            await self.send_message(update, "⚠️ Internal error. Please try again.")
+
+    async def shutdown(self) -> None:
+        await self.http_client.aclose()
