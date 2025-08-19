@@ -218,18 +218,18 @@ Example: /oil
             price_50 = unit_price * Decimal('50')
             
             msg = (
-                f"🛢 *Oil Production Cost Analysis*\n\n"
-                f"📦 *Resources for 3 drills (50 oil):*\n"
+                f"🛢 Oil Production Cost Analysis\n\n"
+                f"📦 Resources for 3 drills (50 oil):\n"
                 f"• 60 Wood: {self.format_decimal(total_wood_cost)} Flower\n"
                 f"• 27 Iron: {self.format_decimal(total_iron_cost)} Flower\n"
                 f"• 30 Leather: {self.format_decimal(total_leather_cost)} Flower\n"
-                f"💸 *Total cost:* {self.format_decimal(total_cost)} Flower\n\n"
-                f"📊 *Unit cost:* {self.format_decimal(unit_price)} Flower/oil\n\n"
-                f"💡 *Price for:*\n"
+                f"💸 Total cost: {self.format_decimal(total_cost)} Flower\n\n"
+                f"📊 Unit cost: {self.format_decimal(unit_price)} Flower/oil\n\n"
+                f"💡 Price for: + 300 coins\n"
                 f"• 1 oil: {self.format_decimal(unit_price)} Flower\n"
                 f"• 10 oil: {self.format_decimal(price_10)} Flower\n"
                 f"• 50 oil: {self.format_decimal(price_50)} Flower\n\n"
-                f"*Note:* Based on current market prices\n"
+                f"Note: Based on current market prices\n"
                 f"3 drills produce 50 oil (10+10+30)"
             )
             
