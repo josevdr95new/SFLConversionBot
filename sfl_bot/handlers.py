@@ -110,6 +110,7 @@ class Handlers(PriceBot):
 /status - Show cache status
 /calc <expression> - Mathematical calculator
 /land <number> - Farm details
+/oil - Oil production cost
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -118,6 +119,7 @@ class Handlers(PriceBot):
 /flower 10.5678 - Value of USD
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
+/oil - Oil production cost
 
 💝 Donate to support development:
 {DONATION_ADDRESS}
@@ -148,11 +150,16 @@ Example: /calc (5+3)*2
 /land <number> - Show farm details
 Example: /land 123
 
+🛢 Oil Command:
+/oil - Show oil production cost
+Example: /oil
+
 💡 Examples:
 /stone - Unit price
 /stone 20 - Conversion
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
+/oil - Oil production cost
 """
         await self.send_message(update, help_msg)
         await self.send_advertisement(update)
@@ -181,6 +188,61 @@ Example: /land 123
         except Exception as e:
             self.error_stats['cache'] += 1
             await self.send_message(update, "❌ Error checking system status")
+
+    async def handle_oil(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        try:
+            prices = await self.get_prices()
+            
+            # Get required resource prices
+            wood_price = prices.get("wood", Decimal('0'))
+            iron_price = prices.get("iron", Decimal('0'))
+            leather_price = prices.get("leather", Decimal('0'))
+            
+            if any(price == 0 for price in [wood_price, iron_price, leather_price]):
+                self.error_stats['api'] += 1
+                await self.send_message(update, "❌ Could not fetch all required resource prices")
+                return
+            
+            # Calculate cost for 3 drills (produces 50 oil)
+            # Each drill costs: 20 wood, 9 iron, 10 leather
+            total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
+            total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
+            total_leather_cost = Decimal('30') * leather_price  # 3 drills * 10 leather
+            
+            total_cost = total_wood_cost + total_iron_cost + total_leather_cost
+            
+            # Calculate unit prices
+            unit_price = total_cost / Decimal('50')
+            price_10 = unit_price * Decimal('10')
+            price_50 = unit_price * Decimal('50')
+            
+            msg = (
+                f"🛢 *Oil Production Cost Analysis*\n\n"
+                f"📦 *Resources for 3 drills (50 oil):*\n"
+                f"• 60 Wood: {self.format_decimal(total_wood_cost)} Flower\n"
+                f"• 27 Iron: {self.format_decimal(total_iron_cost)} Flower\n"
+                f"• 30 Leather: {self.format_decimal(total_leather_cost)} Flower\n"
+                f"💸 *Total cost:* {self.format_decimal(total_cost)} Flower\n\n"
+                f"📊 *Unit cost:* {self.format_decimal(unit_price)} Flower/oil\n\n"
+                f"💡 *Price for:*\n"
+                f"• 1 oil: {self.format_decimal(unit_price)} Flower\n"
+                f"• 10 oil: {self.format_decimal(price_10)} Flower\n"
+                f"• 50 oil: {self.format_decimal(price_50)} Flower\n\n"
+                f"*Note:* Based on current market prices\n"
+                f"3 drills produce 50 oil (10+10+30)"
+            )
+            
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['calculation'] += 1
+            error_msg = (
+                f"❌ Error calculating oil production cost:\n"
+                f"{str(e)[:100]}"
+            )
+            await self.send_message(update, error_msg)
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
@@ -434,25 +496,4 @@ Example: /land 123
                     return
                 await self.handle_flower_conversion(update, amount)
             else:
-                await self.handle_item_conversion(update, command, amount)
-
-        except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing your request")
-
-    async def error_handler(self, update: object, context: CallbackContext) -> None:
-        error = context.error
-        if isinstance(error, HTTPStatusError):
-            self.error_stats['api'] += 1
-        elif isinstance(error, (InvalidOperation, ValueError)):
-            self.error_stats['input'] += 1
-        elif isinstance(error, (DecimalException, ZeroDivisionError)):
-            self.error_stats['calculation'] += 1
-        else:
-            self.error_stats['other'] += 1
-
-        if isinstance(update, Update) and update.message:
-            await self.send_message(update, "⚠️ Internal error. Please try again.")
-
-    async def shutdown(self) -> None:
-        await self.http_client.aclose()
+           
