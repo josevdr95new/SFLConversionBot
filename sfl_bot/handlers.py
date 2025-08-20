@@ -2,12 +2,12 @@ import re
 import asyncio
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
+from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 from httpx import HTTPStatusError
 from .config import MAX_INPUT_LENGTH, MARKET_FEE, BOT_VERSION, DONATION_ADDRESS
 from .services import PriceBot
-from datetime import datetime
 
 def escape_markdown(text: str) -> str:
     """Escapa todos los caracteres reservados de MarkdownV2"""
@@ -26,7 +26,90 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
+        self.advertisement_shown = {}
+        # Nuevas estadísticas
+        self.last_command_time = None
+        self.daily_stats = {
+            'commands': 0,
+            'unique_users': set(),
+            'date': datetime.now().date()
+        }
+        self.unique_users_all_time = set()
+        self.daily_command_history = {}
+        self.online_users = set()
+        self.last_online_check = datetime.now()
+
+    def update_stats(self, update: Update):
+        """Actualizar estadísticas de uso"""
+        current_date = datetime.now().date()
+        
+        # Reiniciar estadísticas diarias si es un nuevo día
+        if current_date != self.daily_stats['date']:
+            self.daily_stats = {
+                'commands': 0,
+                'unique_users': set(),
+                'date': current_date
+            }
+        
+        # Actualizar estadísticas
+        self.last_command_time = datetime.now()
+        self.command_count += 1
+        self.daily_stats['commands'] += 1
+        
+        user_id = update.message.from_user.id
+        self.daily_stats['unique_users'].add(user_id)
+        self.unique_users_all_time.add(user_id)
+        self.online_users.add(user_id)
+        
+        # Guardar histórico diario
+        date_str = current_date.strftime('%Y-%m-%d')
+        if date_str not in self.daily_command_history:
+            self.daily_command_history[date_str] = {
+                'commands': 0,
+                'unique_users': set()
+            }
+        self.daily_command_history[date_str]['commands'] += 1
+        self.daily_command_history[date_str]['unique_users'].add(user_id)
+
+    def get_stats_summary(self):
+        """Obtener resumen de estadísticas"""
+        current_date = datetime.now().date()
+        yesterday = (current_date - timedelta(days=1)).strftime('%Y-%m-%d')
+        
+        # Calcular promedios y tendencias
+        total_days = len(self.daily_command_history)
+        avg_daily_commands = self.command_count / max(1, total_days)
+        
+        yesterday_commands = self.daily_command_history.get(yesterday, {}).get('commands', 0)
+        today_commands = self.daily_stats['commands']
+        
+        # Limpiar usuarios inactivos (más de 5 minutos)
+        now = datetime.now()
+        if (now - self.last_online_check).total_seconds() > 300:  # 5 minutos
+            self.last_online_check = now
+            # Mantener solo usuarios activos en los últimos 15 minutos
+            self.online_users = {uid for uid in self.online_users 
+                               if any((now - cmd_time).total_seconds() < 900 
+                                     for cmd_time in self.get_user_last_activity(uid))}
+        
+        return {
+            'last_command': self.last_command_time,
+            'today_commands': today_commands,
+            'yesterday_commands': yesterday_commands,
+            'unique_today': len(self.daily_stats['unique_users']),
+            'unique_all_time': len(self.unique_users_all_time),
+            'online_users': len(self.online_users),
+            'avg_daily_commands': avg_daily_commands,
+            'total_days_tracked': total_days
+        }
+
+    def get_user_last_activity(self, user_id):
+        """Obtener tiempos de última actividad de un usuario"""
+        # Esta función debería implementarse para rastrear actividad por usuario
+        # Por ahora devolvemos una lista con el último comando si está disponible
+        if self.last_command_time and hasattr(self, 'last_user_activity'):
+            return [self.last_command_time]
+        return []
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -85,14 +168,14 @@ class Handlers(PriceBot):
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True  # Vista previa desactivada
+                disable_web_page_preview=True
             )
         except Exception as e:
             import logging
             logging.error(f"Error sending advertisement: {e}")
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             prices = await self.get_prices()
             items_list = ", ".join(sorted(prices.keys()))
@@ -134,7 +217,7 @@ class Handlers(PriceBot):
             await self.send_message(update, "❌ Error showing available items")
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         help_msg = f"""
 🛠 Complete Help v{BOT_VERSION}
 
@@ -165,7 +248,7 @@ Example: /oil
         await self.send_advertisement(update)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             now = datetime.now()
             prices_expiry = getattr(self, "_get_prices_expiry", None)
@@ -173,6 +256,8 @@ Example: /oil
             
             prices_ttl = (prices_expiry - now).seconds if prices_expiry else 0
             exchange_ttl = (exchange_expiry - now).seconds if exchange_expiry else 0
+            
+            stats = self.get_stats_summary()
             
             status_msg = f"""
 🔄 System Status v{BOT_VERSION}
@@ -182,6 +267,25 @@ Example: /oil
 
 💱 Exchange cache:
 {'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} (TTL: {max(0, exchange_ttl)}s)
+
+📈 Usage Statistics:
+⏰ Last command: {stats['last_command'].strftime('%Y-%m-%d %H:%M:%S') if stats['last_command'] else 'Never'}
+📊 Commands today: {stats['today_commands']}
+📈 Commands yesterday: {stats['yesterday_commands']}
+👥 Unique users today: {stats['unique_today']}
+👤 Unique users all time: {stats['unique_all_time']}
+🟢 Online users: {stats['online_users']}
+📅 Days tracked: {stats['total_days_tracked']}
+📋 Avg daily commands: {stats['avg_daily_commands']:.1f}
+
+📊 Total commands: {self.command_count}
+❌ Total errors: {sum(self.error_stats.values())}
+🔍 Error breakdown:
+• API: {self.error_stats.get('api', 0)}
+• Input: {self.error_stats.get('input', 0)}
+• Calculations: {self.error_stats.get('calculation', 0)}
+• Cache: {self.error_stats.get('cache', 0)}
+• Others: {self.error_stats.get('other', 0)}
 """
             await self.send_message(update, status_msg)
             await self.send_advertisement(update)
@@ -190,7 +294,7 @@ Example: /oil
             await self.send_message(update, "❌ Error checking system status")
 
     async def handle_oil(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             prices = await self.get_prices()
             
@@ -245,7 +349,7 @@ Example: /oil
             await self.send_message(update, error_msg)
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
@@ -278,7 +382,7 @@ Example: /oil
             await self.send_message(update, "❌ Error processing your request")
 
     async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
@@ -311,7 +415,7 @@ Example: /oil
             await self.send_message(update, "❌ Error processing your request")
 
     async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             prices, rates = await asyncio.gather(
                 self.get_prices(),
@@ -365,7 +469,7 @@ Example: /oil
             await self.send_message(update, "❌ Error processing your request")
 
     async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             expression = ' '.join(context.args)
             if not expression:
@@ -391,7 +495,7 @@ Example: /oil
             await self.send_message(update, "❌ Error processing calculation")
 
     async def handle_land(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         try:
             if not context.args:
                 await self.send_message(update, "ℹ️ Please specify a farm ID. Example: /land 123")
@@ -458,7 +562,7 @@ Example: /oil
             await self.send_message(update, error_msg)
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
+        self.update_stats(update)
         if not update.message or not update.message.text:
             return
 
