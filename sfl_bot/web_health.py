@@ -1,6 +1,6 @@
 import logging
 from aiohttp import web
-from datetime import datetime
+from datetime import datetime, timedelta
 from .config import configure_logging, BOT_VERSION
 
 logger = configure_logging()
@@ -23,6 +23,23 @@ async def handle_ping(request: web.Request) -> web.Response:
         if hasattr(bot, 'start_time'):
             uptime = datetime.now() - bot.start_time
             status_info.append(f"⏱ Uptime: {str(uptime).split('.')[0]}")
+
+        # Estadísticas de uso si están disponibles
+        if hasattr(bot, 'get_stats_summary'):
+            try:
+                stats = bot.get_stats_summary()
+                status_info.append("\n📈 Usage Statistics:")
+                status_info.append(f"⏰ Last command: {stats['last_command'].strftime('%Y-%m-%d %H:%M:%S') if stats['last_command'] else 'Never'}")
+                status_info.append(f"📊 Commands today: {stats['today_commands']}")
+                status_info.append(f"📈 Commands yesterday: {stats['yesterday_commands']}")
+                status_info.append(f"👥 Unique users today: {stats['unique_today']}")
+                status_info.append(f"👤 Unique users all time: {stats['unique_all_time']}")
+                status_info.append(f"🟢 Online users: {stats['online_users']}")
+                status_info.append(f"📅 Days tracked: {stats['total_days_tracked']}")
+                status_info.append(f"📋 Avg daily commands: {stats['avg_daily_commands']:.1f}")
+            except Exception as e:
+                logger.warning(f"Error getting stats: {e}")
+                status_info.append("\n⚠️ Could not retrieve usage statistics")
 
         # Estado de la caché
         cache_info = []
