@@ -181,26 +181,16 @@ Example: /status
         self.command_count += 1
         try:
             prices = await self.get_prices()
-            rates = await self.get_exchange_rates()
-            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
             
             # Ordenar alfabéticamente
             sorted_items = sorted(prices.items(), key=lambda x: x[0])
             
-            # Crear lista formateada
+            # Crear lista formateada: solo el precio en Flower, cada elemento en una línea
             price_list = []
             for item, price in sorted_items:
-                usd_price = price * flower_rate
-                price_list.append(
-                    f"• {item}: {self.format_decimal(price)} Flower "
-                    f"(≈ ${self.format_decimal(usd_price)} USD)"
-                )
+                price_list.append(f"• {item}: {self.format_decimal(price)} Flower")
             
-            msg = (
-                f"📊 *All Resource Prices*\n\n"
-                f"{chr(10).join(price_list)}\n\n"
-                f"💱 Exchange rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
-            )
+            msg = f"📊 *All Resource Prices*\n\n{chr(10).join(price_list)}"
             
             await self.send_message(update, msg)
             await self.send_advertisement(update)
