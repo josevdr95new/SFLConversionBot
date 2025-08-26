@@ -61,7 +61,9 @@ class Handlers(PriceBot):
         
         # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 10 != 0:
+        
+        # Incrementar contador y mostrar anuncio cada 10 comandos
+        if ad_count % 10 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
