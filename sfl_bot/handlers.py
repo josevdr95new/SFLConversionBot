@@ -77,9 +77,9 @@ class Handlers(PriceBot):
             
             # Mensaje bilingüe
             ad_text = (
-                "🌟 *Please support the project by cleaning and following my farm\!* 🌾\n"
+                "🌟 Please support the project by cleaning and following my farm! 🌾\n"
                 "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)\n\n"
-                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\!* 🌾\n"
+                "🌟 Por favor apoya el proyecto limpiando y siguiendo mi granja! 🌾\n"
                 "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
             )
             await update.message.reply_text(
@@ -181,6 +181,8 @@ Example: /status
         self.command_count += 1
         try:
             prices = await self.get_prices()
+            rates = await self.get_exchange_rates()
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
             
             # Ordenar alfabéticamente
             sorted_items = sorted(prices.items(), key=lambda x: x[0])
@@ -188,9 +190,12 @@ Example: /status
             # Crear lista formateada: solo el precio en Flower, cada elemento en una línea
             price_list = []
             for item, price in sorted_items:
-                price_list.append(f"• {item}: {self.format_decimal(price)} Flower")
+                price_list.append(f"{item}: {self.format_decimal(price)} Flower")
             
-            msg = f"📊 *All Resource Prices*\n\n{chr(10).join(price_list)}"
+            # Añadir el precio de Flower (USD) al final
+            price_list.append(f"\n💱 Exchange rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}")
+            
+            msg = f"📊 All Resource Prices\n\n{chr(10).join(price_list)}"
             
             await self.send_message(update, msg)
             await self.send_advertisement(update)
@@ -216,12 +221,12 @@ Example: /status
             exchange_ttl = (exchange_expiry - now).seconds if exchange_expiry else 0
             
             status_msg = (
-                f"🔄 *System Status* v{BOT_VERSION}\n\n"
-                f"⏰ *Uptime:* {days}d {hours}h {minutes}m {seconds}s\n\n"
-                f"📊 *Prices cache:*\n"
+                f"🔄 System Status v{BOT_VERSION}\n\n"
+                f"⏰ Uptime: {days}d {hours}h {minutes}m {seconds}s\n\n"
+                f"📊 Prices cache:\n"
                 f"{'✅ Valid' if prices_ttl > 0 else '❌ Expired'} "
                 f"(TTL: {max(0, prices_ttl)}s)\n\n"
-                f"💱 *Exchange cache:*\n"
+                f"💱 Exchange cache:\n"
                 f"{'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} "
                 f"(TTL: {max(0, exchange_ttl)}s)"
             )
