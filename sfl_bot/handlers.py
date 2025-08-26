@@ -62,7 +62,7 @@ class Handlers(PriceBot):
         # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
         
-        # Incrementar contador y mostrar anuncio cada 10 comandos
+        # Mostrar anuncio cada 10 comandos (en el comando 10, 20, 30, etc.)
         if ad_count % 10 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
@@ -70,24 +70,23 @@ class Handlers(PriceBot):
         self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
-            # Separador visual
+            # Separador visual (sin formato Markdown para evitar problemas)
             await update.message.reply_text(
                 "══════════════════",
-                parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
             
-            # Mensaje bilingüe
+            # Mensaje bilingüe con formato MarkdownV2 correctamente escapado
             ad_text = (
-                "🌟 Please support the project by cleaning and following my farm! 🌾\n"
-                "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)\n\n"
-                "🌟 Por favor apoya el proyecto limpiando y siguiendo mi granja! 🌾\n"
-                "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
+                "🌟 *Please support the project by cleaning and following my farm\\!* 🌾\n"
+                "[Visit my farm now](https://sunflower-land\\.com/play/#/visit/30911)\n\n"
+                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\\!* 🌾\n"
+                "[Visita mi granja ahora](https://sunflower-land\\.com/play/#/visit/30911)"
             )
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True  # Vista previa desactivada
+                disable_web_page_preview=True
             )
         except Exception as e:
             import logging
