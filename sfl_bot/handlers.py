@@ -27,6 +27,10 @@ class Handlers(PriceBot):
         }
         self.start_time = datetime.now()
         self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
+        # Nuevo: Seguimiento de usuarios únicos
+        self.unique_users = set()
+        self.daily_users = set()
+        self.last_reset = datetime.now().date()
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -41,6 +45,18 @@ class Handlers(PriceBot):
         if '.' in formatted:
             formatted = formatted.rstrip('0').rstrip('.')
         return formatted
+
+    async def update_user_stats(self, user_id: int) -> None:
+        """Actualiza estadísticas de usuarios únicos"""
+        current_date = datetime.now().date()
+        
+        # Reiniciar contador diario si cambió la fecha
+        if current_date != self.last_reset:
+            self.daily_users.clear()
+            self.last_reset = current_date
+            
+        self.unique_users.add(user_id)
+        self.daily_users.add(user_id)
 
     async def send_message(self, update: Update, text: str) -> None:
         try:
@@ -94,6 +110,7 @@ class Handlers(PriceBot):
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             prices = await self.get_prices()
             items_list = ", ".join(sorted(prices.keys()))
@@ -105,6 +122,7 @@ class Handlers(PriceBot):
 /start - Show this message
 /help - Detailed help
 /prices - Show all resource prices
+/donate - Show donation address
 /<item> - Unit price
 /<item> <amount> - Conversion with commission
 /usd <amount> - Convert Flower to USD
@@ -125,8 +143,7 @@ class Handlers(PriceBot):
 /land 123 - Farm details
 /oil - Oil production cost
 
-💝 Donate to support development:
-{DONATION_ADDRESS}
+💡 Suggestions? Contact: @codecode001
 
 📦 Available items:
 {items_list}
@@ -139,6 +156,7 @@ class Handlers(PriceBot):
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         help_msg = f"""
 🛠 Complete Help v{BOT_VERSION}
 
@@ -149,6 +167,10 @@ class Handlers(PriceBot):
 📊 Prices Command:
 /prices - Show all resource prices
 Example: /prices
+
+💰 Donate Command:
+/donate - Show donation address
+Example: /donate
 
 🧮 Calculator Command:
 /calc <expression> - Basic math operations
@@ -174,12 +196,26 @@ Example: /status
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
 /status - System status
+
+💡 Suggestions? Contact: @codecode001
 """
         await self.send_message(update, help_msg)
         await self.send_advertisement(update)
 
+    async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        donate_msg = (
+            f"💝 Donate to support development:\n"
+            f"`{DONATION_ADDRESS}`\n\n"
+            f"Thank you for your support! ❤️"
+        )
+        await self.send_message(update, donate_msg)
+        await self.send_advertisement(update)
+
     async def handle_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             prices = await self.get_prices()
             rates = await self.get_exchange_rates()
@@ -208,6 +244,7 @@ Example: /status
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             now = datetime.now()
             uptime = now - self.start_time
@@ -223,6 +260,8 @@ Example: /status
             
             status_msg = (
                 f"🔄 System Status v{BOT_VERSION}\n\n"
+                f"👥 Unique users today: {len(self.daily_users)}\n"
+                f"👥 Total unique users: {len(self.unique_users)}\n"
                 f"⏰ Uptime: {days}d {hours}h {minutes}m {seconds}s\n\n"
                 f"📊 Prices cache:\n"
                 f"{'✅ Valid' if prices_ttl > 0 else '❌ Expired'} "
@@ -240,6 +279,7 @@ Example: /status
 
     async def handle_oil(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             prices = await self.get_prices()
             
@@ -295,6 +335,7 @@ Example: /status
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
@@ -328,6 +369,7 @@ Example: /status
 
     async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
@@ -361,6 +403,7 @@ Example: /status
 
     async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             prices, rates = await asyncio.gather(
                 self.get_prices(),
@@ -415,6 +458,7 @@ Example: /status
 
     async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             expression = ' '.join(context.args)
             if not expression:
@@ -441,6 +485,7 @@ Example: /status
 
     async def handle_land(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             if not context.args:
                 await self.send_message(update, "ℹ️ Please specify a farm ID. Example: /land 123")
@@ -508,6 +553,7 @@ Example: /status
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         if not update.message or not update.message.text:
             return
 
