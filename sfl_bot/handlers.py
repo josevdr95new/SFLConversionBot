@@ -71,19 +71,20 @@ class Handlers(PriceBot):
             import logging
             logging.error(f"Error sending message: {e}")
 
-    async def send_advertisement(self, update: Update) -> None:
+    async def send_advertisement(self, update: Update, force: bool = False) -> None:
         """Envía el mensaje publicitario en inglés y español"""
         chat_id = update.message.chat_id
         
-        # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
-        ad_count = self.advertisement_shown.get(chat_id, 0)
-        
-        # Mostrar anuncio cada 10 comandos (en el comando 10, 20, 30, etc.)
-        if ad_count % 10 != 0:
-            self.advertisement_shown[chat_id] = ad_count + 1
-            return
+        if not force:
+            # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
+            ad_count = self.advertisement_shown.get(chat_id, 0)
             
-        self.advertisement_shown[chat_id] = ad_count + 1
+            # Mostrar anuncio cada 10 comandos (en el comando 10, 20, 30, etc.)
+            if ad_count % 10 != 0:
+                self.advertisement_shown[chat_id] = ad_count + 1
+                return
+                
+            self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
             # Separador visual (sin formato Markdown para evitar problemas)
@@ -149,7 +150,8 @@ class Handlers(PriceBot):
 {items_list}
 """
             await self.send_message(update, welcome_msg)
-            await self.send_advertisement(update)  # Publicidad inmediata después del start
+            # Forzar mostrar publicidad inmediatamente después del start
+            await self.send_advertisement(update, force=True)
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error showing available items")
