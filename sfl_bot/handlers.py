@@ -149,7 +149,7 @@ class Handlers(PriceBot):
 {items_list}
 """
             await self.send_message(update, welcome_msg)
-            await self.send_advertisement(update)
+            await self.send_advertisement(update)  # Publicidad inmediata después del start
         except Exception as e:
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error showing available items")
@@ -205,13 +205,9 @@ Example: /status
     async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
-        donate_msg = (
-            f"💝 Donate to support development:\n"
-            f"{DONATION_ADDRESS}\n\n"
-            f"Thank you for your support! ❤️"
-        )
+        donate_msg = DONATION_ADDRESS  # Solo la dirección sin texto adicional
         await self.send_message(update, donate_msg)
-        await self.send_advertisement(update)
+        # No mostrar publicidad en donación
 
     async def handle_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
