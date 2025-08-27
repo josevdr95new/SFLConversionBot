@@ -23,11 +23,12 @@ def setup_application() -> Application:
     application.add_handlers([
         CommandHandler("start", bot.handle_start),
         CommandHandler("help", bot.handle_help),
+        CommandHandler("prices", bot.handle_prices),
         CommandHandler("status", bot.handle_status),
         CommandHandler("calc", bot.handle_calc),
         CommandHandler("land", bot.handle_land),
         CommandHandler("oil", bot.handle_oil),
-        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|status|calc|land|oil)$"), bot.handle_item)
+        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil)$"), bot.handle_item)
     ])
     
     application.add_error_handler(bot.error_handler)
