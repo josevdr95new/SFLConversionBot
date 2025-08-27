@@ -58,15 +58,22 @@ class Handlers(PriceBot):
         self.unique_users.add(user_id)
         self.daily_users.add(user_id)
 
-    async def send_message(self, update: Update, text: str) -> None:
+    async def send_message(self, update: Update, text: str, parse_markdown: bool = True) -> None:
         try:
-            # Escapar automáticamente todo el texto Markdown
-            escaped_text = escape_markdown(text)
-            await update.message.reply_text(
-                escaped_text,
-                parse_mode="MarkdownV2",
-                disable_web_page_preview=True
-            )
+            if parse_markdown:
+                # Escapar automáticamente todo el texto Markdown
+                escaped_text = escape_markdown(text)
+                await update.message.reply_text(
+                    escaped_text,
+                    parse_mode="MarkdownV2",
+                    disable_web_page_preview=True
+                )
+            else:
+                # Enviar sin formato Markdown
+                await update.message.reply_text(
+                    text,
+                    disable_web_page_preview=True
+                )
         except Exception as e:
             import logging
             logging.error(f"Error sending message: {e}")
@@ -205,12 +212,13 @@ Example: /status
     async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
-        donate_msg = (
-            f"💝 Donate to support development:\n"
-            f"`{DONATION_ADDRESS}`\n\n"
-            f"Thank you for your support! ❤️"
-        )
-        await self.send_message(update, donate_msg)
+        donate_msg = f"""💝 Donate to support development:
+
+{DONATION_ADDRESS}
+
+Thank you for your support! ❤️"""
+        # Enviar sin formato Markdown para que la dirección sea fácil de copiar
+        await self.send_message(update, donate_msg, parse_markdown=False)
         await self.send_advertisement(update)
 
     async def handle_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
