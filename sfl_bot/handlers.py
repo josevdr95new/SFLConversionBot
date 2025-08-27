@@ -61,31 +61,32 @@ class Handlers(PriceBot):
         
         # Mostrar anuncio máximo 1 vez cada 10 comandos por chat
         ad_count = self.advertisement_shown.get(chat_id, 0)
-        if ad_count > 0 and ad_count % 10 != 0:
+        
+        # Mostrar anuncio cada 10 comandos (en el comando 10, 20, 30, etc.)
+        if ad_count % 10 != 0:
             self.advertisement_shown[chat_id] = ad_count + 1
             return
             
         self.advertisement_shown[chat_id] = ad_count + 1
 
         try:
-            # Separador visual
+            # Separador visual (sin formato Markdown para evitar problemas)
             await update.message.reply_text(
                 "══════════════════",
-                parse_mode="MarkdownV2",
                 disable_web_page_preview=True
             )
             
-            # Mensaje bilingüe
+            # Mensaje bilingüe con formato MarkdownV2 correctamente escapado
             ad_text = (
-                "🌟 *Please support the project by cleaning and following my farm\!* 🌾\n"
-                "[Visit my farm now](https://sunflower-land.com/play/#/visit/30911)\n\n"
-                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\!* 🌾\n"
-                "[Visita mi granja ahora](https://sunflower-land.com/play/#/visit/30911)"
+                "🌟 *Please support the project by cleaning and following my farm\\!* 🌾\n"
+                "[Visit my farm now](https://sunflower-land\\.com/play/#/visit/30911)\n\n"
+                "🌟 *Por favor apoya el proyecto limpiando y siguiendo mi granja\\!* 🌾\n"
+                "[Visita mi granja ahora](https://sunflower-land\\.com/play/#/visit/30911)"
             )
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True  # Vista previa desactivada
+                disable_web_page_preview=True
             )
         except Exception as e:
             import logging
@@ -103,11 +104,12 @@ class Handlers(PriceBot):
 📌 Available commands:
 /start - Show this message
 /help - Detailed help
+/prices - Show all resource prices
 /<item> - Unit price
 /<item> <amount> - Conversion with commission
 /usd <amount> - Convert Flower to USD
 /flower <amount> - Convert USD to Flower
-/status - Show cache status
+/status - Show cache status and uptime
 /calc <expression> - Mathematical calculator
 /land <number> - Farm details
 /oil - Oil production cost
@@ -115,8 +117,10 @@ class Handlers(PriceBot):
 🔹 Examples:
 /merino wool - Price of Merino Wool
 /merino wool 5 - Convert Merino Wool
+/prices - Show all prices
 /usd 1.2345 - Value of Flower
 /flower 10.5678 - Value of USD
+/status - System status
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
 /oil - Oil production cost
@@ -142,6 +146,10 @@ class Handlers(PriceBot):
 - Items: Case-insensitive, spaces allowed
 - Amounts: Numbers with up to 8 decimals
 
+📊 Prices Command:
+/prices - Show all resource prices
+Example: /prices
+
 🧮 Calculator Command:
 /calc <expression> - Basic math operations
 Example: /calc (5+3)*2
@@ -154,35 +162,76 @@ Example: /land 123
 /oil - Show oil production cost
 Example: /oil
 
+📈 Status Command:
+/status - Show cache status and uptime
+Example: /status
+
 💡 Examples:
 /stone - Unit price
 /stone 20 - Conversion
+/prices - All prices
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
+/status - System status
 """
         await self.send_message(update, help_msg)
         await self.send_advertisement(update)
+
+    async def handle_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        try:
+            prices = await self.get_prices()
+            rates = await self.get_exchange_rates()
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            
+            # Ordenar alfabéticamente
+            sorted_items = sorted(prices.items(), key=lambda x: x[0])
+            
+            # Crear lista formateada: solo el precio en Flower, cada elemento en una línea
+            price_list = []
+            for item, price in sorted_items:
+                price_list.append(f"{item}: {self.format_decimal(price)} Flower")
+            
+            # Añadir el precio de Flower (USD) al final
+            price_list.append(f"\n💱 Exchange rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}")
+            
+            msg = f"📊 All Resource Prices\n\n{chr(10).join(price_list)}"
+            
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['other'] += 1
+            error_msg = f"❌ Error fetching prices: {str(e)[:100]}"
+            await self.send_message(update, error_msg)
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         try:
             now = datetime.now()
+            uptime = now - self.start_time
+            days = uptime.days
+            hours, remainder = divmod(uptime.seconds, 3600)
+            minutes, seconds = divmod(remainder, 60)
+            
             prices_expiry = getattr(self, "_get_prices_expiry", None)
             exchange_expiry = getattr(self, "_get_exchange_rates_expiry", None)
             
             prices_ttl = (prices_expiry - now).seconds if prices_expiry else 0
             exchange_ttl = (exchange_expiry - now).seconds if exchange_expiry else 0
             
-            status_msg = f"""
-🔄 System Status v{BOT_VERSION}
-
-📊 Prices cache:
-{'✅ Valid' if prices_ttl > 0 else '❌ Expired'} (TTL: {max(0, prices_ttl)}s)
-
-💱 Exchange cache:
-{'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} (TTL: {max(0, exchange_ttl)}s)
-"""
+            status_msg = (
+                f"🔄 System Status v{BOT_VERSION}\n\n"
+                f"⏰ Uptime: {days}d {hours}h {minutes}m {seconds}s\n\n"
+                f"📊 Prices cache:\n"
+                f"{'✅ Valid' if prices_ttl > 0 else '❌ Expired'} "
+                f"(TTL: {max(0, prices_ttl)}s)\n\n"
+                f"💱 Exchange cache:\n"
+                f"{'✅ Valid' if exchange_ttl > 0 else '❌ Expired'} "
+                f"(TTL: {max(0, exchange_ttl)}s)"
+            )
+            
             await self.send_message(update, status_msg)
             await self.send_advertisement(update)
         except Exception as e:
