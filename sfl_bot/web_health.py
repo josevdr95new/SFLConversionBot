@@ -24,6 +24,11 @@ async def handle_ping(request: web.Request) -> web.Response:
             uptime = datetime.now() - bot.start_time
             status_info.append(f"⏱ Uptime: {str(uptime).split('.')[0]}")
 
+        # Estadísticas de usuarios
+        if hasattr(bot, 'unique_users') and hasattr(bot, 'daily_users'):
+            status_info.append(f"👥 Unique users today: {len(bot.daily_users)}")
+            status_info.append(f"👥 Total unique users: {len(bot.unique_users)}")
+
         # Estado de la caché
         cache_info = []
         now = datetime.now()
