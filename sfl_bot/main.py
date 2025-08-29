@@ -33,7 +33,7 @@ def setup_application() -> Application:
         CommandHandler("usd", bot.handle_usd_conversion),
         CommandHandler("flower", bot.handle_flower_conversion),
         MessageHandler(filters.TEXT & ~filters.COMMAND, bot.handle_button_press),
-        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil|lavapit|donate|usd|flower)$"), bot.handle_item)
+        MessageHandler(filters.COMMAND, bot.handle_item)
     ])
     
     application.add_error_handler(bot.error_handler)
