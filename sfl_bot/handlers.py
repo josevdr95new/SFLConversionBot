@@ -1,17 +1,13 @@
 import re
 import asyncio
-import logging
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 from httpx import HTTPStatusError
 from .config import MAX_INPUT_LENGTH, MARKET_FEE, BOT_VERSION, DONATION_ADDRESS
 from .services import PriceBot
 from datetime import datetime
-
-# Set up logging
-logger = logging.getLogger(__name__)
 
 def escape_markdown(text: str) -> str:
     """Escapa todos los caracteres reservados de MarkdownV2"""
@@ -30,19 +26,11 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}
+        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
+        # Nuevo: Seguimiento de usuarios únicos
         self.unique_users = set()
         self.daily_users = set()
         self.last_reset = datetime.now().date()
-        
-        # Definir la botonera
-        self.keyboard = [
-            ["📊 Prices", "🛢 Oil Cost", "🌋 Lava Pit"],
-            ["🧮 Calculator", "🌾 Farm Info", "📈 Status"],
-            ["💵 USD to SFL", "🌻 SFL to USD", "❤️ Donate"],
-            ["🆘 Help", "🚀 Start"]
-        ]
-        self.reply_markup = ReplyKeyboardMarkup(self.keyboard, resize_keyboard=True)
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -70,19 +58,18 @@ class Handlers(PriceBot):
         self.unique_users.add(user_id)
         self.daily_users.add(user_id)
 
-    async def send_message(self, update: Update, text: str, use_keyboard=True) -> None:
+    async def send_message(self, update: Update, text: str) -> None:
         try:
             # Escapar automáticamente todo el texto Markdown
             escaped_text = escape_markdown(text)
-            reply_markup = self.reply_markup if use_keyboard else ReplyKeyboardRemove()
             await update.message.reply_text(
                 escaped_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True,
-                reply_markup=reply_markup
+                disable_web_page_preview=True
             )
         except Exception as e:
-            logger.error(f"Error sending message: {e}")
+            import logging
+            logging.error(f"Error sending message: {e}")
 
     async def send_advertisement(self, update: Update, force: bool = False) -> None:
         """Envía el mensaje publicitario en inglés y español"""
@@ -103,8 +90,7 @@ class Handlers(PriceBot):
             # Separador visual (sin formato Markdown para evitar problemas)
             await update.message.reply_text(
                 "══════════════════",
-                disable_web_page_preview=True,
-                reply_markup=self.reply_markup
+                disable_web_page_preview=True
             )
             
             # Mensaje bilingüe con formato MarkdownV2 correctamente escapado
@@ -117,11 +103,11 @@ class Handlers(PriceBot):
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True,
-                reply_markup=self.reply_markup
+                disable_web_page_preview=True
             )
         except Exception as e:
-            logger.error(f"Error sending advertisement: {e}")
+            import logging
+            logging.error(f"Error sending advertisement: {e}")
 
     async def handle_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -170,7 +156,6 @@ class Handlers(PriceBot):
             await self.send_advertisement(update, force=True)
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_start: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error showing available items")
 
     async def handle_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -229,7 +214,7 @@ Example: /status
     async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
-        donate_msg = f"❤️ Donation Address:\n`{DONATION_ADDRESS}`"
+        donate_msg = DONATION_ADDRESS  # Solo la dirección sin texto adicional
         await self.send_message(update, donate_msg)
         # No mostrar publicidad en donación
 
@@ -259,7 +244,6 @@ Example: /status
             
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_prices: {str(e)}", exc_info=True)
             error_msg = f"❌ Error fetching prices: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
@@ -296,7 +280,6 @@ Example: /status
             await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['cache'] += 1
-            logger.error(f"Error in handle_status: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error checking system status")
 
     async def handle_oil(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -349,7 +332,6 @@ Example: /status
             
         except Exception as e:
             self.error_stats['calculation'] += 1
-            logger.error(f"Error in handle_oil: {str(e)}", exc_info=True)
             error_msg = (
                 f"❌ Error calculating oil production cost:\n"
                 f"{str(e)[:100]}"
@@ -465,26 +447,13 @@ Example: /status
             
         except Exception as e:
             self.error_stats['calculation'] += 1
-            logger.error(f"Error in handle_lavapit: {str(e)}", exc_info=True)
             error_msg = f"❌ Error calculating Lava Pit costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
-    async def handle_usd_conversion(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
-            if not context.args:
-                await self.send_message(update, "ℹ️ Please specify an amount. Example: /usd 5.5")
-                return
-                
-            amount_str = context.args[0]
-            try:
-                amount = Decimal(amount_str)
-            except InvalidOperation:
-                self.error_stats['input'] += 1
-                await self.send_message(update, "⚠️ Invalid amount format")
-                return
-
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
                 await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
@@ -513,25 +482,12 @@ Example: /status
             await self.send_message(update, "⚠️ Calculation error")
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_usd_conversion: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error processing your request")
 
-    async def handle_flower_conversion(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
-            if not context.args:
-                await self.send_message(update, "ℹ️ Please specify an amount. Example: /flower 1.2345")
-                return
-                
-            amount_str = context.args[0]
-            try:
-                amount = Decimal(amount_str)
-            except InvalidOperation:
-                self.error_stats['input'] += 1
-                await self.send_message(update, "⚠️ Invalid amount format")
-                return
-
             if not await self.validate_amount(amount):
                 self.error_stats['input'] += 1
                 await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
@@ -560,10 +516,11 @@ Example: /status
             await self.send_message(update, "⚠️ Calculation error")
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_flower_conversion: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error processing your request")
 
     async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
         try:
             prices, rates = await asyncio.gather(
                 self.get_prices(),
@@ -614,7 +571,6 @@ Example: /status
             await self.send_message(update, "⚠️ Calculation error")
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_item_conversion: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error processing your request")
 
     async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -642,7 +598,6 @@ Example: /status
             await self.send_advertisement(update)
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_calc: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error processing calculation")
 
     async def handle_land(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -707,44 +662,11 @@ Example: /status
 
         except Exception as e:
             self.error_stats['api'] += 1
-            logger.error(f"Error in handle_land: {str(e)}", exc_info=True)
             error_msg = (
                 f"❌ Error fetching farm data:\n"
                 f"{str(e)[:100]}"
             )
             await self.send_message(update, error_msg)
-
-    async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        """Maneja las pulsaciones de botones del teclado personalizado"""
-        text = update.message.text
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        
-        if text == "📊 Prices":
-            await self.handle_prices(update, context)
-        elif text == "🛢 Oil Cost":
-            await self.handle_oil(update, context)
-        elif text == "🌋 Lava Pit":
-            await self.handle_lavapit(update, context)
-        elif text == "🧮 Calculator":
-            await self.send_message(update, "🧮 Please type your calculation after /calc command\nExample: /calc (5+3)*2")
-        elif text == "🌾 Farm Info":
-            await self.send_message(update, "🌾 To get farm information, use /land followed by the farm ID\nExample: /land 123")
-        elif text == "📈 Status":
-            await self.handle_status(update, context)
-        elif text == "💵 USD to SFL":
-            await self.send_message(update, "💵 To convert USD to SFL, use /flower followed by the amount\nExample: /flower 10.50")
-        elif text == "🌻 SFL to USD":
-            await self.send_message(update, "🌻 To convert SFL to USD, use /usd followed by the amount\nExample: /usd 5.75")
-        elif text == "❤️ Donate":
-            await self.handle_donate(update, context)
-        elif text == "🆘 Help":
-            await self.handle_help(update, context)
-        elif text == "🚀 Start":
-            await self.handle_start(update, context)
-        else:
-            # Si no es un botón, intentar manejarlo como un ítem
-            await self.handle_item_conversion(update, text, None)
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -759,65 +681,37 @@ Example: /status
                 await self.send_message(update, "⚠️ Input too long. Please shorten your request.")
                 return
 
-            # Check if it's a button press first
-            button_texts = ["📊 Prices", "🛢 Oil Cost", "🌋 Lava Pit", "🧮 Calculator", 
-                           "🌾 Farm Info", "📈 Status", "💵 USD to SFL", "🌻 SFL to USD", 
-                           "❤️ Donate", "🆘 Help", "🚀 Start"]
-            if text in button_texts:
-                await self.handle_button_press(update, context)
+            match = re.match(r"^\/(.+?)(?:\s+([\d\.]{1,20}))?$", text, re.IGNORECASE)
+            
+            if not match:
+                self.error_stats['input'] += 1
+                await self.send_message(update, "⚠️ Invalid format. Use /help")
                 return
 
-            # Check if it's a command
-            if text.startswith('/'):
-                # Parse the command
-                parts = text[1:].split()  # Remove the leading slash and split
-                if not parts:
+            command, amount_str = match.groups()
+            
+            try:
+                amount = Decimal(amount_str) if amount_str else None
+            except InvalidOperation:
+                self.error_stats['input'] += 1
+                await self.send_message(update, "⚠️ Invalid amount format")
+                return
+
+            if command.lower() == "usd":
+                if amount is None:
+                    await self.send_message(update, "ℹ️ Example: /usd 5.5")
                     return
-                
-                command = parts[0].lower()
-                amount = None
-                
-                # Check if it's a known command that needs special handling
-                if command in ['usd', 'flower']:
-                    if len(parts) < 2:
-                        await self.send_message(update, f"ℹ️ Example: /{command} 5.5")
-                        return
-                    try:
-                        amount = Decimal(parts[1])
-                    except InvalidOperation:
-                        await self.send_message(update, "⚠️ Invalid amount format")
-                        return
-                    
-                    if command == 'usd':
-                        await self.handle_usd_conversion(update, context)
-                    else:
-                        await self.handle_flower_conversion(update, context)
+                await self.handle_usd_conversion(update, amount)
+            elif command.lower() == "flower":
+                if amount is None:
+                    await self.send_message(update, "ℹ️ Example: /flower 1.2345")
                     return
-                
-                # Handle item commands like /kale or /stone 100
-                item_name = command
-                if len(parts) > 1:
-                    # Check if the last part is a number (amount)
-                    try:
-                        amount = Decimal(parts[-1])
-                        # If it is, the item name is everything except the amount
-                        if len(parts) > 2:
-                            item_name = ' '.join(parts[:-1])
-                        else:
-                            # Only two parts: command and amount, so item name is just the command
-                            item_name = command
-                    except InvalidOperation:
-                        # If it's not a number, treat everything as the item name
-                        item_name = ' '.join(parts)
-                
-                await self.handle_item_conversion(update, item_name, amount)
+                await self.handle_flower_conversion(update, amount)
             else:
-                # If it's not a command, treat it as an item name
-                await self.handle_item_conversion(update, text, None)
+                await self.handle_item_conversion(update, command, amount)
 
         except Exception as e:
             self.error_stats['other'] += 1
-            logger.error(f"Error in handle_item: {str(e)}", exc_info=True)
             await self.send_message(update, "❌ Error processing your request")
 
     async def error_handler(self, update: object, context: CallbackContext) -> None:
