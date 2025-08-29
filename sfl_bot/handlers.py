@@ -132,6 +132,7 @@ class Handlers(PriceBot):
 /calc <expression> - Mathematical calculator
 /land <number> - Farm details
 /oil - Oil production cost
+/lavapit - Seasonal requirements cost
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -143,6 +144,7 @@ class Handlers(PriceBot):
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
 /oil - Oil production cost
+/lavapit - Seasonal requirements cost
 
 💡 Suggestions? Contact: @codecode001
 
@@ -186,6 +188,10 @@ Example: /land 123
 /oil - Show oil production cost
 Example: /oil
 
+🌋 Lava Pit Command:
+/lavapit - Show seasonal requirements cost
+Example: /lavapit
+
 📈 Status Command:
 /status - Show cache status and uptime
 Example: /status
@@ -197,6 +203,7 @@ Example: /status
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
+/lavapit - Seasonal requirements cost
 /status - System status
 
 💡 Suggestions? Contact: @codecode001
@@ -329,6 +336,92 @@ Example: /status
                 f"❌ Error calculating oil production cost:\n"
                 f"{str(e)[:100]}"
             )
+            await self.send_message(update, error_msg)
+
+    async def handle_lavapit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            prices = await self.get_prices()
+            
+            # Seasonal requirements with their costs
+            seasons = {
+                "autumn": {
+                    "artichoke": 30,
+                    "broccoli": 750,
+                    "yam": 1000,
+                    "gold": 5,
+                    "crimstone": 4
+                },
+                "winter": {
+                    "merino wool": 200,
+                    "onion": 400,
+                    "turnip": 200
+                },
+                "spring": {
+                    "celestine": 2,
+                    "lunara": 2,
+                    "duskberry": 2,
+                    "rhubarb": 2000,
+                    "kale": 100
+                },
+                "summer": {
+                    "oil": 100,
+                    "pepper": 750,
+                    "zucchini": 1000
+                }
+            }
+
+            # Calculate costs for each season
+            season_costs = {}
+            for season, requirements in seasons.items():
+                season_total = Decimal('0')
+                breakdown = []
+                
+                for item, quantity in requirements.items():
+                    # Find matching item in prices (case-insensitive)
+                    item_key = next(
+                        (k for k in prices.keys() if k.replace(" ", "").lower() == item.replace(" ", "").lower()),
+                        None
+                    )
+                    
+                    if not item_key:
+                        breakdown.append(f"❌ {item}: Not found")
+                        continue
+                    
+                    item_price = prices[item_key]
+                    item_total = quantity * item_price
+                    season_total += item_total
+                    
+                    breakdown.append(
+                        f"  • {item_key.capitalize()} x{quantity}: "
+                        f"{self.format_decimal(item_total)} Flower"
+                    )
+                
+                season_costs[season] = {
+                    "total": season_total,
+                    "breakdown": breakdown
+                }
+
+            # Format message
+            msg = ["🌋 Seasonal Requirements Cost Analysis\n"]
+            
+            for season, data in season_costs.items():
+                msg.append(f"\n🍂 {season.capitalize()}:")
+                msg.extend(data["breakdown"])
+                msg.append(f"  💰 Total: {self.format_decimal(data['total'])} Flower")
+            
+            # Add total across all seasons
+            grand_total = sum(data["total"] for data in season_costs.values())
+            msg.append(f"\n🌻 Grand Total (all seasons): {self.format_decimal(grand_total)} Flower")
+            msg.append("\n💡 Based on current market prices")
+
+            await self.send_message(update, "\n".join(msg))
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['calculation'] += 1
+            error_msg = f"❌ Error calculating seasonal costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
