@@ -2,7 +2,7 @@ import re
 import asyncio
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, CallbackContext
 from httpx import HTTPStatusError
 from .config import MAX_INPUT_LENGTH, MARKET_FEE, BOT_VERSION, DONATION_ADDRESS
@@ -26,11 +26,19 @@ class Handlers(PriceBot):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
-        # Nuevo: Seguimiento de usuarios únicos
+        self.advertisement_shown = {}
         self.unique_users = set()
         self.daily_users = set()
         self.last_reset = datetime.now().date()
+        
+        # Definir la botonera
+        self.keyboard = [
+            ["📊 Prices", "🛢 Oil Cost", "🌋 Lava Pit"],
+            ["🧮 Calculator", "🌾 Farm Info", "📈 Status"],
+            ["💵 USD to SFL", "🌻 SFL to USD", "❤️ Donate"],
+            ["🆘 Help", "🚀 Start"]
+        ]
+        self.reply_markup = ReplyKeyboardMarkup(self.keyboard, resize_keyboard=True)
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -58,14 +66,16 @@ class Handlers(PriceBot):
         self.unique_users.add(user_id)
         self.daily_users.add(user_id)
 
-    async def send_message(self, update: Update, text: str) -> None:
+    async def send_message(self, update: Update, text: str, use_keyboard=True) -> None:
         try:
             # Escapar automáticamente todo el texto Markdown
             escaped_text = escape_markdown(text)
+            reply_markup = self.reply_markup if use_keyboard else ReplyKeyboardRemove()
             await update.message.reply_text(
                 escaped_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=reply_markup
             )
         except Exception as e:
             import logging
@@ -90,7 +100,8 @@ class Handlers(PriceBot):
             # Separador visual (sin formato Markdown para evitar problemas)
             await update.message.reply_text(
                 "══════════════════",
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=self.reply_markup
             )
             
             # Mensaje bilingüe con formato MarkdownV2 correctamente escapado
@@ -103,7 +114,8 @@ class Handlers(PriceBot):
             await update.message.reply_text(
                 ad_text,
                 parse_mode="MarkdownV2",
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                reply_markup=self.reply_markup
             )
         except Exception as e:
             import logging
@@ -214,7 +226,7 @@ Example: /status
     async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
-        donate_msg = DONATION_ADDRESS  # Solo la dirección sin texto adicional
+        donate_msg = f"❤️ Donation Address:\n`{DONATION_ADDRESS}`"
         await self.send_message(update, donate_msg)
         # No mostrar publicidad en donación
 
@@ -518,61 +530,6 @@ Example: /status
             self.error_stats['other'] += 1
             await self.send_message(update, "❌ Error processing your request")
 
-    async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        try:
-            prices, rates = await asyncio.gather(
-                self.get_prices(),
-                self.get_exchange_rates()
-            )
-            
-            item_key = next(
-                (k for k in prices.keys() if k.replace(" ", "").lower() == item_name.replace(" ", "").lower()),
-                None
-            )
-            
-            if not item_key:
-                self.error_stats['input'] += 1
-                await self.send_message(update, f"❌ Item '{item_name}' not found")
-                return
-
-            price = prices[item_key]
-            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
-
-            if amount:
-                if not await self.validate_amount(amount):
-                    self.error_stats['input'] += 1
-                    await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
-                    return
-
-                gross_flower = amount * price
-                gross_usd = gross_flower * flower_rate
-                fee = gross_usd * MARKET_FEE
-                net_usd = gross_usd - fee
-                
-                msg = (
-                    f"📊 Unit Price: 1 {item_key} ≈ {self.format_decimal(price)} Flower\n"
-                    f"🪙 {self.format_decimal(amount)} {item_key} ≈ {self.format_decimal(gross_flower)} Flower\n"
-                    f"💵 Gross value: ≈ ${self.format_decimal(gross_usd)}\n"
-                    f"📉 Commission (10%): ≈ -${self.format_decimal(fee)}\n"
-                    f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
-                )
-            else:
-                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
-
-            await self.send_message(update, msg)
-            await self.send_advertisement(update)
-        except InvalidOperation:
-            self.error_stats['input'] += 1
-            await self.send_message(update, "⚠️ Invalid amount format")
-        except DecimalException:
-            self.error_stats['calculation'] += 1
-            await self.send_message(update, "⚠️ Calculation error")
-        except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing your request")
-
     async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
@@ -668,6 +625,37 @@ Example: /status
             )
             await self.send_message(update, error_msg)
 
+    async def handle_button_press(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Maneja las pulsaciones de botones del teclado personalizado"""
+        text = update.message.text
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        
+        if text == "📊 Prices":
+            await self.handle_prices(update, context)
+        elif text == "🛢 Oil Cost":
+            await self.handle_oil(update, context)
+        elif text == "🌋 Lava Pit":
+            await self.handle_lavapit(update, context)
+        elif text == "🧮 Calculator":
+            await self.send_message(update, "🧮 Please type your calculation after /calc command\nExample: /calc (5+3)*2")
+        elif text == "🌾 Farm Info":
+            await self.send_message(update, "🌾 To get farm information, use /land followed by the farm ID\nExample: /land 123")
+        elif text == "📈 Status":
+            await self.handle_status(update, context)
+        elif text == "💵 USD to SFL":
+            await self.send_message(update, "💵 To convert USD to SFL, use /flower followed by the amount\nExample: /flower 10.50")
+        elif text == "🌻 SFL to USD":
+            await self.send_message(update, "🌻 To convert SFL to USD, use /usd followed by the amount\nExample: /usd 5.75")
+        elif text == "❤️ Donate":
+            await self.handle_donate(update, context)
+        elif text == "🆘 Help":
+            await self.handle_help(update, context)
+        elif text == "🚀 Start":
+            await self.handle_start(update, context)
+        else:
+            await self.handle_item(update, context)
+
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
@@ -681,11 +669,18 @@ Example: /status
                 await self.send_message(update, "⚠️ Input too long. Please shorten your request.")
                 return
 
+            # Check if it's a button press first
+            if text in ["📊 Prices", "🛢 Oil Cost", "🌋 Lava Pit", "🧮 Calculator", 
+                       "🌾 Farm Info", "📈 Status", "💵 USD to SFL", "🌻 SFL to USD", 
+                       "❤️ Donate", "🆘 Help", "🚀 Start"]:
+                await self.handle_button_press(update, context)
+                return
+
             match = re.match(r"^\/(.+?)(?:\s+([\d\.]{1,20}))?$", text, re.IGNORECASE)
             
             if not match:
                 self.error_stats['input'] += 1
-                await self.send_message(update, "⚠️ Invalid format. Use /help")
+                await self.send_message(update, "⚠️ Invalid format. Use /help or tap a button below.")
                 return
 
             command, amount_str = match.groups()
