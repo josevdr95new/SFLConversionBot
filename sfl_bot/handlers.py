@@ -290,8 +290,8 @@ Example: /status
             
             # Get required resource prices
             wood_price = prices.get("wood", Decimal('0'))
-            iron_price = prices.get("iron", Decimal('0'))
-            leather_price = prices.get("leather", Decimal('0'))
+            iron_price = prices.get('iron', Decimal('0'))
+            leather_price = prices.get('leather', Decimal('0'))
             
             if any(price == 0 for price in [wood_price, iron_price, leather_price]):
                 self.error_stats['api'] += 1
@@ -648,7 +648,7 @@ Example: /status
             # VIP info details
             vip_info = land_info.get('vip_info', {})
             vip_details = []
-            if vip_info.get('have'):
+            if vip_info and vip_info.get('have'):
                 vip_details.append("Active")
                 if vip_info.get('lifetime'):
                     vip_details.append("Lifetime")
@@ -663,17 +663,24 @@ Example: /status
             legacy = ", ".join(land_info.get('legacy', []))
             created = land_info.get('created', 'unknown')
             
-            # Referrals info
+            # Referrals info - Manejar tanto diccionario como entero
             referrals = land_info.get('referrals', {})
-            total_referrals = referrals.get('totalReferrals', 0)
-            total_vip_referrals = referrals.get('totalVIPReferrals', 0)
+            total_referrals = 0
+            total_vip_referrals = 0
+            
+            if isinstance(referrals, dict):
+                total_referrals = referrals.get('totalReferrals', 0)
+                total_vip_referrals = referrals.get('totalVIPReferrals', 0)
+            elif isinstance(referrals, int):
+                total_referrals = referrals
+                total_vip_referrals = 0
             
             # Format Bumpkin information
-            bumpkin_level = bumpkin_info.get('level', 0)
-            bumpkin_exp = Decimal(str(bumpkin_info.get('experience', 0)))
+            bumpkin_level = bumpkin_info.get('level', 0) if bumpkin_info else 0
+            bumpkin_exp = Decimal(str(bumpkin_info.get('experience', 0))) if bumpkin_info else Decimal('0')
             
             # Count skills
-            skills = bumpkin_info.get('skills', {})
+            skills = bumpkin_info.get('skills', {}) if bumpkin_info else {}
             total_skills = len(skills) if skills else 0
             
             # Build message - Corregido el problema con la f-string
