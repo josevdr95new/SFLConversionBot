@@ -663,7 +663,7 @@ Example: /status
             legacy = ", ".join(land_info.get('legacy', []))
             created = land_info.get('created', 'unknown')
             
-            # Referrals info - Manejar tanto diccionario como entero
+            # Referrals info
             referrals = land_info.get('referrals', {})
             total_referrals = 0
             total_vip_referrals = 0
@@ -683,34 +683,40 @@ Example: /status
             skills = bumpkin_info.get('skills', {}) if bumpkin_info else {}
             total_skills = len(skills) if skills else 0
             
-            # Build message - Corregido el problema con la f-string
-            vip_details_text = f" ({' '.join(vip_details)})" if vip_details else ""
-            message = (
-                f"🌾 Farm ID: {land_id}\n"
-                f"🏜 Type: {land_type} | 📊 Expansion: {land_level}\n"
-                f"💰 Coins: {self.format_decimal(land_coins)} | 🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
-                f"💎 Gems: {gem} | 🎖 Marks: {marks}\n"
-                f"✨ Charm: {charm} | 🎉 Cheer: {cheer}\n"
-                f"✅ Verified: {verified} | 👑 VIP: {vip}{vip_details_text}\n"
-                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.format_decimal(tax_resource)}%\n"
-                f"🏆 Legacy: {legacy if legacy else 'None'}\n"
-                f"🗓 Created: {created}\n"
-                f"👥 Referrals: {total_referrals} (VIP: {total_vip_referrals})\n"
-                f"🔒 Ban Status: {ban_status} | Social Verified: {is_social_verified}\n\n"
-                f"👤 Bumpkin\n"
-                f"📊 Level: {bumpkin_level} | 🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
+            # Build message with improved formatting
+            message = [
+                f"🌾 Farm ID: {land_id}",
+                f"🏜 Type: {land_type}",
+                f"📊 Expansion: {land_level}",
+                f"💰 Coins: {self.format_decimal(land_coins)}",
+                f"🌻 Flower Balance: {self.format_decimal(land_balance)}",
+                f"💎 Gems: {gem}",
+                f"🎖 Marks: {marks}",
+                f"✨ Charm: {charm}",
+                f"🎉 Cheer: {cheer}",
+                f"✅ Verified: {verified}",
+                f"👑 VIP: {vip} {' '.join(vip_details) if vip_details else ''}",
+                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)}",
+                f"📈 Tax Resource: {self.format_decimal(tax_resource)}%",
+                f"🏆 Legacy: {legacy if legacy else 'None'}",
+                f"🗓 Created: {created}",
+                f"👥 Referrals: {total_referrals}",
+                f"⭐ VIP Referrals: {total_vip_referrals}",
+                f"🔒 Ban Status: {ban_status}",
+                f"🌐 Social Verified: {is_social_verified}",
+                "",
+                "👤 Bumpkin Information:",
+                f"📊 Level: {bumpkin_level}",
+                f"🌟 Experience: {self.format_decimal(bumpkin_exp)}",
                 f"🎯 Total Skills: {total_skills}"
-            )
+            ]
             
-            await self.send_message(update, message)
+            await self.send_message(update, "\n".join(message))
             await self.send_advertisement(update)
 
         except Exception as e:
             self.error_stats['api'] += 1
-            error_msg = (
-                f"❌ Error fetching farm data:\n"
-                f"{str(e)[:100]}"
-            )
+            error_msg = f"❌ Error fetching farm data: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
