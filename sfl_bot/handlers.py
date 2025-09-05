@@ -635,6 +635,39 @@ Example: /status
             land_coins = Decimal(str(land_info.get('coins', 0)))
             land_balance = Decimal(str(land_info.get('balance', 0)))
             
+            # New fields from API
+            gem = land_info.get('gem', 0)
+            marks = land_info.get('marks', 0)
+            charm = land_info.get('charm', 0)
+            cheer = land_info.get('cheer', 0)
+            verified = "✅" if land_info.get('verified') else "❌"
+            ban_status = land_info.get('ban', {}).get('status', 'unknown')
+            is_social_verified = "✅" if land_info.get('ban', {}).get('isSocialVerified') else "❌"
+            vip = "✅" if land_info.get('vip') else "❌"
+            
+            # VIP info details
+            vip_info = land_info.get('vip_info', {})
+            vip_details = []
+            if vip_info.get('have'):
+                vip_details.append("Active")
+                if vip_info.get('lifetime'):
+                    vip_details.append("Lifetime")
+                if vip_info.get('have_game'):
+                    vip_details.append("Game")
+                if vip_info.get('have_ronin'):
+                    vip_details.append("Ronin")
+                vip_details.append(f"Exp: {vip_info.get('exp_text', 'unknown')}")
+            
+            tax_free_sfl = Decimal(str(land_info.get('taxFreeSFL', 0)))
+            tax_resource = Decimal(str(land_info.get('taxResource', 0))) * 100
+            legacy = ", ".join(land_info.get('legacy', []))
+            created = land_info.get('created', 'unknown')
+            
+            # Referrals info
+            referrals = land_info.get('referrals', {})
+            total_referrals = referrals.get('totalReferrals', 0)
+            total_vip_referrals = referrals.get('totalVIPReferrals', 0)
+            
             # Format Bumpkin information
             bumpkin_level = bumpkin_info.get('level', 0)
             bumpkin_exp = Decimal(str(bumpkin_info.get('experience', 0)))
@@ -645,16 +678,20 @@ Example: /status
             
             # Build message
             message = (
-                f"🌾 -Farm ID: {land_id}-\n"
-                f"🏜 Type: {land_type}\n"
-                f"📊 Expansion: {land_level}\n"
-                f"💰 Coins: {self.format_decimal(land_coins)}\n"
-                f"🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
-                f"\n"
-                f"👤 -Bumpkin-\n"
-                f"📊 Level: {bumpkin_level}\n"
-                f"🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
-                f"🎯 Skills: {total_skills}"
+                f"🌾 Farm ID: {land_id}\n"
+                f"🏜 Type: {land_type} | 📊 Expansion: {land_level}\n"
+                f"💰 Coins: {self.format_decimal(land_coins)} | 🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
+                f"💎 Gems: {gem} | 🎖 Marks: {marks}\n"
+                f"✨ Charm: {charm} | 🎉 Cheer: {cheer}\n"
+                f"✅ Verified: {verified} | 👑 VIP: {vip} {'('.join(vip_details)})' if vip_details else ''}\n"
+                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.format_decimal(tax_resource)}%\n"
+                f"🏆 Legacy: {legacy if legacy else 'None'}\n"
+                f"🗓 Created: {created}\n"
+                f"👥 Referrals: {total_referrals} (VIP: {total_vip_referrals})\n"
+                f"🔒 Ban Status: {ban_status} | Social Verified: {is_social_verified}\n\n"
+                f"👤 Bumpkin\n"
+                f"📊 Level: {bumpkin_level} | 🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
+                f"🎯 Total Skills: {total_skills}"
             )
             
             await self.send_message(update, message)
