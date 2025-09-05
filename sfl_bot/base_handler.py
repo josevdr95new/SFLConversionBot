@@ -1,7 +1,7 @@
 import re
 import asyncio
 from decimal import Decimal, InvalidOperation, DecimalException
-from typing import Optional
+from typing import Optional, Dict, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackContext
 from httpx import HTTPStatusError
@@ -110,166 +110,41 @@ class BaseHandler(PriceBot):
             logging.error(f"Error sending advertisement: {e}")
 
     async def validate_amount(self, amount: Decimal) -> bool:
-        """Valida que la cantidad sea válida"""
-        return amount >= Decimal('0.00000001')
+        """Validate amount is positive and within acceptable range"""
+        return amount > Decimal('0') and amount <= Decimal('1000000000')
 
-    async def calculate_oil_production_cost(self) -> tuple[Decimal, Decimal]:
-        """Calcula el costo de producción de petróleo"""
-        try:
-            prices = await self.get_prices()
-            
-            # Obtener precios de recursos requeridos
-            wood_price = prices.get("wood", Decimal('0'))
-            iron_price = prices.get('iron', Decimal('0'))
-            leather_price = prices.get('leather', Decimal('0'))
-            
-            if any(price == 0 for price in [wood_price, iron_price, leather_price]):
-                self.error_stats['api'] += 1
-                raise ValueError("Could not fetch all required resource prices")
-            
-            # Calcular costo para 3 taladros (producen 50 petróleo)
-            # Cada taladro cuesta: 20 madera, 9 hierro, 10 cuero
-            total_wood_cost = Decimal('60') * wood_price  # 3 taladros * 20 madera
-            total_iron_cost = Decimal('27') * iron_price  # 3 taladros * 9 hierro
-            total_leather_cost = Decimal('30') * leather_price  # 3 taladros * 10 cuero
-            
-            total_cost = total_wood_cost + total_iron_cost + total_leather_cost
-            unit_cost = total_cost / Decimal('50')  # Costo por unidad de petróleo
-            
-            return total_cost, unit_cost
-            
-        except Exception as e:
-            self.error_stats['calculation'] += 1
-            raise e
-
-    async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
-        """Maneja la conversión de Flower a USD"""
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        try:
-            if not await self.validate_amount(amount):
-                self.error_stats['input'] += 1
-                await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
-                return
-
-            rates = await self.get_exchange_rates()
-            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
-            
-            if flower_rate <= 0:
-                self.error_stats['api'] += 1
-                await self.send_message(update, "❌ Invalid exchange rate")
-                return
-            
-            usd_value = amount * flower_rate
-            msg = (
-                f"🌻 {self.format_decimal(amount)} Flower ≈ ${self.format_decimal(usd_value)} USD\n"
-                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
-            )
-            await self.send_message(update, msg)
-            await self.send_advertisement(update)
-        except InvalidOperation:
-            self.error_stats['input'] += 1
-            await self.send_message(update, "⚠️ Invalid amount format")
-        except DecimalException:
-            self.error_stats['calculation'] += 1
-            await self.send_message(update, "⚠️ Calculation error")
-        except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing your request")
-
-    async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
-        """Maneja la conversión de USD a Flower"""
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        try:
-            if not await self.validate_amount(amount):
-                self.error_stats['input'] += 1
-                await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
-                return
-
-            rates = await self.get_exchange_rates()
-            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
-            
-            if flower_rate <= 0:
-                self.error_stats['api'] += 1
-                await self.send_message(update, "❌ Invalid exchange rate")
-                return
-            
-            flower_value = amount / flower_rate
-            msg = (
-                f"💵 ${self.format_decimal(amount)} USD ≈ {self.format_decimal(flower_value)} Flower\n"
-                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
-            )
-            await self.send_message(update, msg)
-            await self.send_advertisement(update)
-        except InvalidOperation:
-            self.error_stats['input'] += 1
-            await self.send_message(update, "⚠️ Invalid amount format")
-        except DecimalException:
-            self.error_stats['calculation'] += 1
-            await self.send_message(update, "⚠️ Calculation error")
-        except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing your request")
-
-    async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
-        """Maneja la conversión de items"""
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        try:
-            prices, rates = await asyncio.gather(
-                self.get_prices(),
-                self.get_exchange_rates()
-            )
-            
-            item_key = next(
-                (k for k in prices.keys() if k.replace(" ", "").lower() == item_name.replace(" ", "").lower()),
-                None
-            )
-            
-            if not item_key:
-                self.error_stats['input'] += 1
-                await self.send_message(update, f"❌ Item '{item_name}' not found")
-                return
-
-            price = prices[item_key]
-            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
-
-            if amount:
-                if not await self.validate_amount(amount):
-                    self.error_stats['input'] += 1
-                    await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
-                    return
-
-                gross_flower = amount * price
-                gross_usd = gross_flower * flower_rate
-                fee = gross_usd * MARKET_FEE
-                net_usd = gross_usd - fee
-                
-                msg = (
-                    f"📊 Unit Price: 1 {item_key} ≈ {self.format_decimal(price)} Flower\n"
-                    f"🪙 {self.format_decimal(amount)} {item_key} ≈ {self.format_decimal(gross_flower)} Flower\n"
-                    f"💵 Gross value: ≈ ${self.format_decimal(gross_usd)}\n"
-                    f"📉 Commission (10%): ≈ -${self.format_decimal(fee)}\n"
-                    f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
-                )
-            else:
-                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
-
-            await self.send_message(update, msg)
-            await self.send_advertisement(update)
-        except InvalidOperation:
-            self.error_stats['input'] += 1
-            await self.send_message(update, "⚠️ Invalid amount format")
-        except DecimalException:
-            self.error_stats['calculation'] += 1
-            await self.send_message(update, "⚠️ Calculation error")
-        except Exception as e:
-            self.error_stats['other'] += 1
-            await self.send_message(update, "❌ Error processing your request")
+    async def calculate_oil_production_cost(self, prices: Dict[str, Decimal]) -> Tuple[Decimal, Dict[str, str]]:
+        """Calculate oil production cost and return unit price and breakdown"""
+        wood_price = prices.get("wood", Decimal('0'))
+        iron_price = prices.get('iron', Decimal('0'))
+        leather_price = prices.get('leather', Decimal('0'))
+        
+        if any(price == 0 for price in [wood_price, iron_price, leather_price]):
+            raise ValueError("Could not fetch all required resource prices")
+        
+        # Calculate cost for 3 drills (produces 50 oil)
+        # Each drill costs: 20 wood, 9 iron, 10 leather
+        total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
+        total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
+        total_leather_cost = Decimal('30') * leather_price  # 3 drills * 10 leather
+        
+        total_cost = total_wood_cost + total_iron_cost + total_leather_cost
+        
+        # Calculate unit prices
+        unit_price = total_cost / Decimal('50')
+        
+        # Create breakdown message
+        breakdown = {
+            'wood': f"60 Wood: {self.format_decimal(total_wood_cost)} Flower",
+            'iron': f"27 Iron: {self.format_decimal(total_iron_cost)} Flower",
+            'leather': f"30 Leather: {self.format_decimal(total_leather_cost)} Flower",
+            'total': f"Total cost: {self.format_decimal(total_cost)} Flower +300 coins",
+            'unit': f"Unit cost: {self.format_decimal(unit_price)} Flower/oil"
+        }
+        
+        return unit_price, breakdown
 
     async def error_handler(self, update: object, context: CallbackContext) -> None:
-        """Maneja errores globales"""
         error = context.error
         if isinstance(error, HTTPStatusError):
             self.error_stats['api'] += 1
@@ -284,5 +159,4 @@ class BaseHandler(PriceBot):
             await self.send_message(update, "⚠️ Internal error. Please try again.")
 
     async def shutdown(self) -> None:
-        """Cierra las conexiones al apagar"""
         await self.http_client.aclose()
