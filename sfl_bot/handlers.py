@@ -139,7 +139,7 @@ class Handlers(PriceBot):
 /merino wool 5 - Convert Merino Wool
 /prices - Show all prices
 /usd 1.2345 - Value of Flower
-/flower 10.5678 - Value of USD
+/flower 10.5678 - Value in USD
 /status - System status
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
@@ -676,14 +676,15 @@ Example: /status
             skills = bumpkin_info.get('skills', {})
             total_skills = len(skills) if skills else 0
             
-            # Build message
+            # Build message - Corregido el problema con la f-string
+            vip_details_text = f" ({' '.join(vip_details)})" if vip_details else ""
             message = (
                 f"🌾 Farm ID: {land_id}\n"
                 f"🏜 Type: {land_type} | 📊 Expansion: {land_level}\n"
                 f"💰 Coins: {self.format_decimal(land_coins)} | 🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
                 f"💎 Gems: {gem} | 🎖 Marks: {marks}\n"
                 f"✨ Charm: {charm} | 🎉 Cheer: {cheer}\n"
-                f"✅ Verified: {verified} | 👑 VIP: {vip} {'('.join(vip_details)})' if vip_details else ''}\n"
+                f"✅ Verified: {verified} | 👑 VIP: {vip}{vip_details_text}\n"
                 f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.format_decimal(tax_resource)}%\n"
                 f"🏆 Legacy: {legacy if legacy else 'None'}\n"
                 f"🗓 Created: {created}\n"
