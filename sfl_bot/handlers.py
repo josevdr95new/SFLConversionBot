@@ -133,6 +133,7 @@ class Handlers(PriceBot):
 /land <number> - Farm details
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
+/compost - Compost production costs
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -145,6 +146,7 @@ class Handlers(PriceBot):
 /land 123 - Farm details
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
+/compost - Compost production costs
 
 💡 Suggestions? Contact: @codecode001
 
@@ -192,6 +194,10 @@ Example: /oil
 /lavapit - Show Lava Pit seasonal production costs
 Example: /lavapit
 
+♻️ Compost Command:
+/compost - Show compost production costs
+Example: /compost
+
 📈 Status Command:
 /status - Show cache status and uptime
 Example: /status
@@ -204,6 +210,7 @@ Example: /status
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
+/compost - Compost production costs
 /status - System status
 
 💡 Suggestions? Contact: @codecode001
@@ -450,6 +457,75 @@ Example: /status
             error_msg = f"❌ Error calculating Lava Pit costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
+    async def handle_compost(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            prices = await self.get_prices()
+            
+            # Definir requisitos de compost para cada composter y temporada
+            composters = {
+                "Compost Bin": {
+                    "spring": {"rhubarb": 10, "carrot": 5},
+                    "summer": {"zucchini": 10, "pepper": 2},
+                    "autumn": {"yam": 15},
+                    "winter": {"potato": 10, "cabbage": 3}
+                },
+                "Turbo Composter": {
+                    "spring": {"soybean": 5, "corn": 3},
+                    "summer": {"cauliflower": 4, "eggplant": 3},
+                    "autumn": {"broccoli": 10, "artichoke": 2},
+                    "winter": {"onion": 5, "turnip": 2}
+                },
+                "Premium Composter": {
+                    "spring": {"blueberry": 8, "egg": 5},
+                    "summer": {"banana": 3, "egg": 5},
+                    "autumn": {"apple": 4, "tomato": 5},
+                    "winter": {"lemon": 3, "apple": 3}
+                }
+            }
+
+            msg = ["♻️ Compost Production Costs\n"]
+            msg.append("💡 Based on current market prices\n")
+
+            for composter, seasons in composters.items():
+                msg.append(f"\n🏗 {composter}:")
+                
+                for season, requirements in seasons.items():
+                    season_total = Decimal('0')
+                    breakdown = []
+                    
+                    for item, quantity in requirements.items():
+                        # Buscar el item en los precios (case-insensitive)
+                        item_key = next(
+                            (k for k in prices.keys() if k.replace(" ", "").lower() == item.replace(" ", "").lower()),
+                            None
+                        )
+                        
+                        if not item_key:
+                            breakdown.append(f"❌ {item}: Not found")
+                            continue
+                        
+                        item_price = prices[item_key]
+                        item_total = quantity * item_price
+                        season_total += item_total
+                        breakdown.append(
+                            f"  • {item_key.capitalize()} x{quantity}: "
+                            f"{self.format_decimal(item_total)} Flower"
+                        )
+                    
+                    msg.append(f"\n  🍂 {season.capitalize()}:")
+                    msg.extend(breakdown)
+                    msg.append(f"  💰 Total: {self.format_decimal(season_total)} Flower")
+
+            await self.send_message(update, "\n".join(msg))
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['calculation'] += 1
+            error_msg = f"❌ Error calculating compost costs: {str(e)[:100]}"
+            await self.send_message(update, error_msg)
+
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
@@ -663,7 +739,7 @@ Example: /status
             legacy = ", ".join(land_info.get('legacy', []))
             created = land_info.get('created', 'unknown')
             
-            # Referrals info
+            # Referrals info - Manejar tanto diccionario como entero
             referrals = land_info.get('referrals', {})
             total_referrals = 0
             total_vip_referrals = 0
@@ -683,40 +759,34 @@ Example: /status
             skills = bumpkin_info.get('skills', {}) if bumpkin_info else {}
             total_skills = len(skills) if skills else 0
             
-            # Build message with improved formatting
-            message = [
-                f"🌾 Farm ID: {land_id}",
-                f"🏜 Type: {land_type}",
-                f"📊 Expansion: {land_level}",
-                f"💰 Coins: {self.format_decimal(land_coins)}",
-                f"🌻 Flower Balance: {self.format_decimal(land_balance)}",
-                f"💎 Gems: {gem}",
-                f"🎖 Marks: {marks}",
-                f"✨ Charm: {charm}",
-                f"🎉 Cheer: {cheer}",
-                f"✅ Verified: {verified}",
-                f"👑 VIP: {vip} {' '.join(vip_details) if vip_details else ''}",
-                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)}",
-                f"📈 Tax Resource: {self.format_decimal(tax_resource)}%",
-                f"🏆 Legacy: {legacy if legacy else 'None'}",
-                f"🗓 Created: {created}",
-                f"👥 Referrals: {total_referrals}",
-                f"⭐ VIP Referrals: {total_vip_referrals}",
-                f"🔒 Ban Status: {ban_status}",
-                f"🌐 Social Verified: {is_social_verified}",
-                "",
-                "👤 Bumpkin Information:",
-                f"📊 Level: {bumpkin_level}",
-                f"🌟 Experience: {self.format_decimal(bumpkin_exp)}",
+            # Build message - Corregido el problema con la f-string
+            vip_details_text = f" ({' '.join(vip_details)})" if vip_details else ""
+            message = (
+                f"🌾 Farm ID: {land_id}\n"
+                f"🏜 Type: {land_type} | 📊 Expansion: {land_level}\n"
+                f"💰 Coins: {self.format_decimal(land_coins)} | 🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
+                f"💎 Gems: {gem} | 🎖 Marks: {marks}\n"
+                f"✨ Charm: {charm} | 🎉 Cheer: {cheer}\n"
+                f"✅ Verified: {verified} | 👑 VIP: {vip}{vip_details_text}\n"
+                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.format_decimal(tax_resource)}%\n"
+                f"🏆 Legacy: {legacy if legacy else 'None'}\n"
+                f"🗓 Created: {created}\n"
+                f"👥 Referrals: {total_referrals} (VIP: {total_vip_referrals})\n"
+                f"🔒 Ban Status: {ban_status} | Social Verified: {is_social_verified}\n\n"
+                f"👤 Bumpkin\n"
+                f"📊 Level: {bumpkin_level} | 🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
                 f"🎯 Total Skills: {total_skills}"
-            ]
+            )
             
-            await self.send_message(update, "\n".join(message))
+            await self.send_message(update, message)
             await self.send_advertisement(update)
 
         except Exception as e:
             self.error_stats['api'] += 1
-            error_msg = f"❌ Error fetching farm data: {str(e)[:100]}"
+            error_msg = (
+                f"❌ Error fetching farm data:\n"
+                f"{str(e)[:100]}"
+            )
             await self.send_message(update, error_msg)
 
     async def handle_item(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
