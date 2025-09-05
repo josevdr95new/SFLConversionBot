@@ -132,6 +132,7 @@ class Handlers(PriceBot):
 /calc <expression> - Mathematical calculator
 /land <number> - Farm details
 /oil - Oil production cost
+/lavapit - Lava Pit seasonal production costs
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -143,6 +144,7 @@ class Handlers(PriceBot):
 /calc (5+3)*2 - Calculate expression
 /land 123 - Farm details
 /oil - Oil production cost
+/lavapit - Lava Pit seasonal production costs
 
 💡 Suggestions? Contact: @codecode001
 
@@ -186,6 +188,10 @@ Example: /land 123
 /oil - Show oil production cost
 Example: /oil
 
+🌋 Lava Pit Command:
+/lavapit - Show Lava Pit seasonal production costs
+Example: /lavapit
+
 📈 Status Command:
 /status - Show cache status and uptime
 Example: /status
@@ -197,6 +203,7 @@ Example: /status
 /usd 5.5 - Value in USD
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
+/lavapit - Lava Pit seasonal production costs
 /status - System status
 
 💡 Suggestions? Contact: @codecode001
@@ -329,6 +336,118 @@ Example: /status
                 f"❌ Error calculating oil production cost:\n"
                 f"{str(e)[:100]}"
             )
+            await self.send_message(update, error_msg)
+
+    async def handle_lavapit(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            prices = await self.get_prices()
+            
+            # Calcular el costo de producción del petróleo (similar al comando /oil)
+            wood_price = prices.get("wood", Decimal('0'))
+            iron_price = prices.get("iron", Decimal('0'))
+            leather_price = prices.get("leather", Decimal('0'))
+            
+            if any(price == 0 for price in [wood_price, iron_price, leather_price]):
+                self.error_stats['api'] += 1
+                await self.send_message(update, "❌ Could not fetch all required resource prices for oil calculation")
+                return
+            
+            # Calcular costo de producción del petróleo (misma lógica que /oil)
+            total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
+            total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
+            total_leather_cost = Decimal('30') * leather_price  # 3 drills * 10 leather
+            total_oil_cost = total_wood_cost + total_iron_cost + total_leather_cost
+            oil_unit_cost = total_oil_cost / Decimal('50')  # Costo por unidad de petróleo
+
+            # Requisitos del Lava Pit por temporada
+            seasons = {
+                "autumn": {
+                    "artichoke": 30,
+                    "broccoli": 750,
+                    "yam": 1000,
+                    "gold": 5,
+                    "crimstone": 4
+                },
+                "winter": {
+                    "merino wool": 200,
+                    "onion": 400,
+                    "turnip": 200
+                },
+                "spring": {
+                    "celestine": 2,
+                    "lunara": 2,
+                    "duskberry": 2,
+                    "rhubarb": 2000,
+                    "kale": 100
+                },
+                "summer": {
+                    "oil": 100,  # Usaremos el costo de producción calculado
+                    "pepper": 750,
+                    "zucchini": 1000
+                }
+            }
+
+            # Calcular costos para cada temporada
+            season_costs = {}
+            for season, requirements in seasons.items():
+                season_total = Decimal('0')
+                breakdown = []
+                
+                for item, quantity in requirements.items():
+                    # Para el petróleo, usar el costo de producción en lugar del precio de mercado
+                    if item == "oil":
+                        item_total = oil_unit_cost * quantity
+                        breakdown.append(
+                            f"  • {item.capitalize()} x{quantity}: "
+                            f"{self.format_decimal(item_total)} Flower (production cost)"
+                        )
+                    else:
+                        # Para otros items, usar precios de mercado
+                        item_key = next(
+                            (k for k in prices.keys() if k.replace(" ", "").lower() == item.replace(" ", "").lower()),
+                            None
+                        )
+                        
+                        if not item_key:
+                            breakdown.append(f"❌ {item}: Not found")
+                            continue
+                        
+                        item_price = prices[item_key]
+                        item_total = quantity * item_price
+                        breakdown.append(
+                            f"  • {item_key.capitalize()} x{quantity}: "
+                            f"{self.format_decimal(item_total)} Flower"
+                        )
+                    
+                    season_total += item_total
+                
+                season_costs[season] = {
+                    "total": season_total,
+                    "breakdown": breakdown
+                }
+
+            # Formatear mensaje
+            msg = ["🌋 Lava Pit Production Cost by Season\n"]
+            msg.append("💡 Oil uses production cost calculation, other items use market prices\n")
+            
+            for season, data in season_costs.items():
+                msg.append(f"\n🍂 {season.capitalize()}:")
+                msg.extend(data["breakdown"])
+                msg.append(f"  💰 Total: {self.format_decimal(data['total'])} Flower")
+            
+            # Añadir total de todas las temporadas
+            grand_total = sum(data["total"] for data in season_costs.values())
+            msg.append(f"\n🌻 Grand Total (all seasons): {self.format_decimal(grand_total)} Flower")
+            msg.append("\n📝 Note: Oil cost is based on production, not market price")
+
+            await self.send_message(update, "\n".join(msg))
+            await self.send_advertisement(update)
+            
+        except Exception as e:
+            self.error_stats['calculation'] += 1
+            error_msg = f"❌ Error calculating Lava Pit costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
