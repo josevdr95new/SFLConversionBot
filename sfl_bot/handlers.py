@@ -1,7 +1,9 @@
 import re
-from decimal import Decimal, InvalidOperation
+import asyncio
+from decimal import Decimal, InvalidOperation, DecimalException
+from typing import Optional
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, CallbackContext
 from .base_handler import BaseHandler
 
 class Handlers(BaseHandler):
@@ -189,22 +191,23 @@ Example: /status
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
-            total_cost, unit_cost = await self.calculate_oil_production_cost()
+            prices = await self.get_prices()
+            oil_unit_cost, breakdown = await self.calculate_oil_production_cost(prices)
             
-            # Calcular precios para diferentes cantidades
-            price_10 = unit_cost * Decimal('10')
-            price_50 = unit_cost * Decimal('50')
+            # Calculate prices for different quantities
+            price_10 = oil_unit_cost * Decimal('10')
+            price_50 = oil_unit_cost * Decimal('50')
             
             msg = (
                 f"🛢 Oil Production Cost Analysis\n\n"
                 f"📦 Resources for 3 drills (50 oil):\n"
-                f"• 60 Wood: {self.format_decimal(total_wood_cost)} Flower\n"
-                f"• 27 Iron: {self.format_decimal(total_iron_cost)} Flower\n"
-                f"• 30 Leather: {self.format_decimal(total_leather_cost)} Flower\n"
-                f"💸 Total cost: {self.format_decimal(total_cost)} Flower +300 coins\n\n"
-                f"📊 Unit cost: {self.format_decimal(unit_cost)} Flower/oil\n\n"
+                f"• {breakdown['wood']}\n"
+                f"• {breakdown['iron']}\n"
+                f"• {breakdown['leather']}\n"
+                f"💸 {breakdown['total']}\n\n"
+                f"📊 {breakdown['unit']}\n\n"
                 f"💡 Price for:\n"
-                f"• 1 oil: {self.format_decimal(unit_cost)} Flower\n"
+                f"• 1 oil: {self.format_decimal(oil_unit_cost)} Flower\n"
                 f"• 10 oil: {self.format_decimal(price_10)} Flower\n"
                 f"• 50 oil: {self.format_decimal(price_50)} Flower\n\n"
                 f"Note: Based on current market prices\n"
@@ -214,9 +217,8 @@ Example: /status
             await self.send_message(update, msg)
             await self.send_advertisement(update)
             
-        except ValueError as e:
-            await self.send_message(update, f"❌ {str(e)}")
         except Exception as e:
+            self.error_stats['calculation'] += 1
             error_msg = (
                 f"❌ Error calculating oil production cost:\n"
                 f"{str(e)[:100]}"
@@ -227,8 +229,8 @@ Example: /status
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
-            # Calcular el costo de producción del petróleo usando el método centralizado
-            total_oil_cost, oil_unit_cost = await self.calculate_oil_production_cost()
+            prices = await self.get_prices()
+            oil_unit_cost, _ = await self.calculate_oil_production_cost(prices)
 
             # Requisitos del Lava Pit por temporada
             seasons = {
@@ -387,6 +389,129 @@ Example: /status
             self.error_stats['calculation'] += 1
             error_msg = f"❌ Error calculating compost costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
+
+    async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            if not await self.validate_amount(amount):
+                self.error_stats['input'] += 1
+                await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
+                return
+
+            rates = await self.get_exchange_rates()
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            
+            if flower_rate <= 0:
+                self.error_stats['api'] += 1
+                await self.send_message(update, "❌ Invalid exchange rate")
+                return
+            
+            usd_value = amount * flower_rate
+            msg = (
+                f"🌻 {self.format_decimal(amount)} Flower ≈ ${self.format_decimal(usd_value)} USD\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
+            )
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+        except InvalidOperation:
+            self.error_stats['input'] += 1
+            await self.send_message(update, "⚠️ Invalid amount format")
+        except DecimalException:
+            self.error_stats['calculation'] += 1
+            await self.send_message(update, "⚠️ Calculation error")
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing your request")
+
+    async def handle_flower_conversion(self, update: Update, amount: Decimal) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            if not await self.validate_amount(amount):
+                self.error_stats['input'] += 1
+                await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
+                return
+
+            rates = await self.get_exchange_rates()
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+            
+            if flower_rate <= 0:
+                self.error_stats['api'] += 1
+                await self.send_message(update, "❌ Invalid exchange rate")
+                return
+            
+            flower_value = amount / flower_rate
+            msg = (
+                f"💵 ${self.format_decimal(amount)} USD ≈ {self.format_decimal(flower_value)} Flower\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
+            )
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+        except InvalidOperation:
+            self.error_stats['input'] += 1
+            await self.send_message(update, "⚠️ Invalid amount format")
+        except DecimalException:
+            self.error_stats['calculation'] += 1
+            await self.send_message(update, "⚠️ Calculation error")
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing your request")
+
+    async def handle_item_conversion(self, update: Update, item_name: str, amount: Optional[Decimal]) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            prices, rates = await asyncio.gather(
+                self.get_prices(),
+                self.get_exchange_rates()
+            )
+            
+            item_key = next(
+                (k for k in prices.keys() if k.replace(" ", "").lower() == item_name.replace(" ", "").lower()),
+                None
+            )
+            
+            if not item_key:
+                self.error_stats['input'] += 1
+                await self.send_message(update, f"❌ Item '{item_name}' not found")
+                return
+
+            price = prices[item_key]
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+
+            if amount:
+                if not await self.validate_amount(amount):
+                    self.error_stats['input'] += 1
+                    await self.send_message(update, "⚠️ Amount must be at least 0.00000001")
+                    return
+
+                gross_flower = amount * price
+                gross_usd = gross_flower * flower_rate
+                fee = gross_usd * MARKET_FEE
+                net_usd = gross_usd - fee
+                
+                msg = (
+                    f"📊 Unit Price: 1 {item_key} ≈ {self.format_decimal(price)} Flower\n"
+                    f"🪙 {self.format_decimal(amount)} {item_key} ≈ {self.format_decimal(gross_flower)} Flower\n"
+                    f"💵 Gross value: ≈ ${self.format_decimal(gross_usd)}\n"
+                    f"📉 Commission (10%): ≈ -${self.format_decimal(fee)}\n"
+                    f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
+                )
+            else:
+                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
+
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+        except InvalidOperation:
+            self.error_stats['input'] += 1
+            await self.send_message(update, "⚠️ Invalid amount format")
+        except DecimalException:
+            self.error_stats['calculation'] += 1
+            await self.send_message(update, "⚠️ Calculation error")
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error processing your request")
 
     async def handle_calc(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
