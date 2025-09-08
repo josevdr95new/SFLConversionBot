@@ -29,9 +29,8 @@ def setup_application() -> Application:
         CommandHandler("land", bot.handle_land),
         CommandHandler("oil", bot.handle_oil),
         CommandHandler("lavapit", bot.handle_lavapit),
-        CommandHandler("compost", bot.handle_compost),  # Nuevo comando compost
         CommandHandler("donate", bot.handle_donate),
-        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil|lavapit|compost|donate)$"), bot.handle_item)
+        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil|lavapit|donate)$"), bot.handle_item)
     ])
     
     application.add_error_handler(bot.error_handler)
