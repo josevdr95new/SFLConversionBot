@@ -135,7 +135,6 @@ class Handlers(PriceBot):
 /land <number> - Farm details
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
-/compost - Compost production costs
 
 🔹 Examples:
 /merino wool - Price of Merino Wool
@@ -148,7 +147,6 @@ class Handlers(PriceBot):
 /land 123 - Farm details
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
-/compost - Compost production costs
 
 💡 Suggestions? Contact: @codecode001
 
@@ -198,10 +196,6 @@ Example: /oil
 /lavapit - Show Lava Pit seasonal production costs
 Example: /lavapit
 
-♻️ Compost Command:
-/compost - Show compost production costs
-Example: /compost
-
 📈 Status Command:
 /status - Show cache status and uptime
 Example: /status
@@ -214,7 +208,6 @@ Example: /status
 /flower 10.5 - Value in Flower
 /oil - Oil production cost
 /lavapit - Lava Pit seasonal production costs
-/compost - Compost production costs
 /status - System status
 
 💡 Suggestions? Contact: @codecode001
@@ -490,75 +483,6 @@ Example: /status
         except Exception as e:
             self.error_stats['calculation'] += 1
             error_msg = f"❌ Error calculating Lava Pit costs: {str(e)[:100]}"
-            await self.send_message(update, error_msg)
-
-    async def handle_compost(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        self.command_count += 1
-        await self.update_user_stats(update.effective_user.id)
-        try:
-            prices = await self.get_prices()
-            
-            # Definir requisitos de compost para cada composter y temporada
-            composters = {
-                "Compost Bin": {
-                    "spring": {"rhubarb": 10, "carrot": 5},
-                    "summer": {"zucchini": 10, "pepper": 2},
-                    "autumn": {"yam": 15},
-                    "winter": {"potato": 10, "cabbage": 3}
-                },
-                "Turbo Composter": {
-                    "spring": {"soybean": 5, "corn": 3},
-                    "summer": {"cauliflower": 4, "eggplant": 3},
-                    "autumn": {"broccoli": 10, "artichoke": 2},
-                    "winter": {"onion": 5, "turnip": 2}
-                },
-                "Premium Composter": {
-                    "spring": {"blueberry": 8, "egg": 5},
-                    "summer": {"banana": 3, "egg": 5},
-                    "autumn": {"apple": 4, "tomato": 5},
-                    "winter": {"leemon": 3, "apple": 3}
-                }
-            }
-
-            msg = ["♻️ Compost Production Costs\n"]
-            msg.append("💡 Based on current market prices\n")
-
-            for composter, seasons in composters.items():
-                msg.append(f"\n🏗 {composter}:")
-                
-                for season, requirements in seasons.items():
-                    season_total = Decimal('0')
-                    breakdown = []
-                    
-                    for item, quantity in requirements.items():
-                        # Buscar el item en los precios (case-insensitive)
-                        item_key = next(
-                            (k for k in prices.keys() if k.replace(" ", "").lower() == item.replace(" ", "").lower()),
-                            None
-                        )
-                        
-                        if not item_key:
-                            breakdown.append(f"❌ {item}: Not found")
-                            continue
-                        
-                        item_price = prices[item_key]
-                        item_total = quantity * item_price
-                        season_total += item_total
-                        breakdown.append(
-                            f"  • {item_key.capitalize()} x{quantity}: "
-                            f"{self.format_decimal(item_total)} Flower"
-                        )
-                    
-                    msg.append(f"\n  🍂 {season.capitalize()}:")
-                    msg.extend(breakdown)
-                    msg.append(f"  💰 Total: {self.format_decimal(season_total)} Flower")
-
-            await self.send_message(update, "\n".join(msg))
-            await self.send_advertisement(update)
-            
-        except Exception as e:
-            self.error_stats['calculation'] += 1
-            error_msg = f"❌ Error calculating compost costs: {str(e)[:100]}"
             await self.send_message(update, error_msg)
 
     async def handle_usd_conversion(self, update: Update, amount: Decimal) -> None:
