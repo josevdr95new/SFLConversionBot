@@ -307,8 +307,8 @@ Example: /status
             resource_per_drill = Decimal('10')
             total_resource = Decimal('30')  # 3 drills * 10 leather
         else:  # wool
-            resource_price = prices.get('merino wool', Decimal('0'))
-            resource_name = "Merino Wool"
+            resource_price = prices.get('wool', Decimal('0'))
+            resource_name = "Wool"
             resource_per_drill = Decimal('20')
             total_resource = Decimal('60')  # 3 drills * 20 wool
         
@@ -516,7 +516,7 @@ Example: /status
                     "spring": {"blueberry": 8, "egg": 5},
                     "summer": {"banana": 3, "egg": 5},
                     "autumn": {"apple": 4, "tomato": 5},
-                    "winter": {"lemon": 3, "apple": 3}
+                    "winter": {"leemon": 3, "apple": 3}
                 }
             }
 
