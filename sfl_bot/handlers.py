@@ -31,6 +31,8 @@ class Handlers(PriceBot):
         self.unique_users = set()
         self.daily_users = set()
         self.last_reset = datetime.now().date()
+        # Nuevo: Almacenar la elección de recurso para oil
+        self.oil_resource_choice = {}  # {chat_id: 'leather' or 'wool'}
 
     def format_decimal(self, value: Decimal) -> str:
         """Format decimal values showing:
@@ -189,6 +191,8 @@ Example: /land 123
 🛢 Oil Command:
 /oil - Show oil production cost
 Example: /oil
+/oil leather - Use leather for oil production
+/oil wool - Use wool for oil production
 
 🌋 Lava Pit Command:
 /lavapit - Show Lava Pit seasonal production costs
@@ -289,49 +293,88 @@ Example: /status
             self.error_stats['cache'] += 1
             await self.send_message(update, "❌ Error checking system status")
 
+    async def calculate_oil_cost(self, resource_type: str = "leather") -> dict:
+        """Calculate oil production cost based on resource type (leather or wool)"""
+        prices = await self.get_prices()
+        
+        # Get required resource prices
+        wood_price = prices.get("wood", Decimal('0'))
+        iron_price = prices.get('iron', Decimal('0'))
+        
+        if resource_type == "leather":
+            resource_price = prices.get('leather', Decimal('0'))
+            resource_name = "Leather"
+            resource_per_drill = Decimal('10')
+            total_resource = Decimal('30')  # 3 drills * 10 leather
+        else:  # wool
+            resource_price = prices.get('merino wool', Decimal('0'))
+            resource_name = "Merino Wool"
+            resource_per_drill = Decimal('20')
+            total_resource = Decimal('60')  # 3 drills * 20 wool
+        
+        if any(price == 0 for price in [wood_price, iron_price, resource_price]):
+            raise Exception("Could not fetch all required resource prices")
+        
+        # Calculate cost for 3 drills (produces 50 oil)
+        # Each drill costs: 20 wood, 9 iron, and either 10 leather or 20 wool
+        total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
+        total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
+        total_resource_cost = total_resource * resource_price
+        
+        total_cost = total_wood_cost + total_iron_cost + total_resource_cost
+        
+        # Calculate unit prices
+        unit_price = total_cost / Decimal('50')
+        price_10 = unit_price * Decimal('10')
+        price_50 = unit_price * Decimal('50')
+        
+        return {
+            "resource_type": resource_type,
+            "resource_name": resource_name,
+            "total_resource": total_resource,
+            "total_wood_cost": total_wood_cost,
+            "total_iron_cost": total_iron_cost,
+            "total_resource_cost": total_resource_cost,
+            "total_cost": total_cost,
+            "unit_price": unit_price,
+            "price_10": price_10,
+            "price_50": price_50
+        }
+
     async def handle_oil(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
-            prices = await self.get_prices()
+            # Get resource choice from command or use default (leather)
+            resource_choice = "leather"  # default
+            if context.args and len(context.args) > 0:
+                arg = context.args[0].lower()
+                if arg in ["leather", "wool"]:
+                    resource_choice = arg
             
-            # Get required resource prices
-            wood_price = prices.get("wood", Decimal('0'))
-            iron_price = prices.get('iron', Decimal('0'))
-            leather_price = prices.get('leather', Decimal('0'))
+            # Store the choice for this chat
+            chat_id = update.message.chat_id
+            self.oil_resource_choice[chat_id] = resource_choice
             
-            if any(price == 0 for price in [wood_price, iron_price, leather_price]):
-                self.error_stats['api'] += 1
-                await self.send_message(update, "❌ Could not fetch all required resource prices")
-                return
-            
-            # Calculate cost for 3 drills (produces 50 oil)
-            # Each drill costs: 20 wood, 9 iron, 10 leather
-            total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
-            total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
-            total_leather_cost = Decimal('30') * leather_price  # 3 drills * 10 leather
-            
-            total_cost = total_wood_cost + total_iron_cost + total_leather_cost
-            
-            # Calculate unit prices
-            unit_price = total_cost / Decimal('50')
-            price_10 = unit_price * Decimal('10')
-            price_50 = unit_price * Decimal('50')
+            # Calculate oil cost
+            oil_data = await self.calculate_oil_cost(resource_choice)
             
             msg = (
-                f"🛢 Oil Production Cost Analysis\n\n"
+                f"🛢 Oil Production Cost Analysis ({oil_data['resource_name']})\n\n"
                 f"📦 Resources for 3 drills (50 oil):\n"
-                f"• 60 Wood: {self.format_decimal(total_wood_cost)} Flower\n"
-                f"• 27 Iron: {self.format_decimal(total_iron_cost)} Flower\n"
-                f"• 30 Leather: {self.format_decimal(total_leather_cost)} Flower\n"
-                f"💸 Total cost: {self.format_decimal(total_cost)} Flower +300 coins\n\n"
-                f"📊 Unit cost: {self.format_decimal(unit_price)} Flower/oil\n\n"
+                f"• 60 Wood: {self.format_decimal(oil_data['total_wood_cost'])} Flower\n"
+                f"• 27 Iron: {self.format_decimal(oil_data['total_iron_cost'])} Flower\n"
+                f"• {oil_data['total_resource']} {oil_data['resource_name']}: "
+                f"{self.format_decimal(oil_data['total_resource_cost'])} Flower\n"
+                f"💸 Total cost: {self.format_decimal(oil_data['total_cost'])} Flower +300 coins\n\n"
+                f"📊 Unit cost: {self.format_decimal(oil_data['unit_price'])} Flower/oil\n\n"
                 f"💡 Price for:\n"
-                f"• 1 oil: {self.format_decimal(unit_price)} Flower\n"
-                f"• 10 oil: {self.format_decimal(price_10)} Flower\n"
-                f"• 50 oil: {self.format_decimal(price_50)} Flower\n\n"
+                f"• 1 oil: {self.format_decimal(oil_data['unit_price'])} Flower\n"
+                f"• 10 oil: {self.format_decimal(oil_data['price_10'])} Flower\n"
+                f"• 50 oil: {self.format_decimal(oil_data['price_50'])} Flower\n\n"
                 f"Note: Based on current market prices\n"
-                f"3 drills produce 50 oil (10+10+30)"
+                f"3 drills produce 50 oil (10+10+30)\n"
+                f"Use /oil leather or /oil wool to change resource type"
             )
             
             await self.send_message(update, msg)
@@ -349,24 +392,15 @@ Example: /status
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
         try:
+            # Get the oil resource choice for this chat, default to leather
+            chat_id = update.message.chat_id
+            resource_choice = self.oil_resource_choice.get(chat_id, "leather")
+            
             prices = await self.get_prices()
             
-            # Calcular el costo de producción del petróleo (similar al comando /oil)
-            wood_price = prices.get("wood", Decimal('0'))
-            iron_price = prices.get("iron", Decimal('0'))
-            leather_price = prices.get("leather", Decimal('0'))
-            
-            if any(price == 0 for price in [wood_price, iron_price, leather_price]):
-                self.error_stats['api'] += 1
-                await self.send_message(update, "❌ Could not fetch all required resource prices for oil calculation")
-                return
-            
-            # Calcular costo de producción del petróleo (misma lógica que /oil)
-            total_wood_cost = Decimal('60') * wood_price  # 3 drills * 20 wood
-            total_iron_cost = Decimal('27') * iron_price  # 3 drills * 9 iron
-            total_leather_cost = Decimal('30') * leather_price  # 3 drills * 10 leather
-            total_oil_cost = total_wood_cost + total_iron_cost + total_leather_cost
-            oil_unit_cost = total_oil_cost / Decimal('50')  # Costo por unidad de petróleo
+            # Calculate the oil production cost
+            oil_data = await self.calculate_oil_cost(resource_choice)
+            oil_unit_cost = oil_data['unit_price']
 
             # Requisitos del Lava Pit por temporada
             seasons = {
@@ -407,7 +441,7 @@ Example: /status
                     if item == "oil":
                         item_total = oil_unit_cost * quantity
                         breakdown.append(
-                            f"  • {item.capitalize()} x{quantity}: "
+                            f"  • {item.capitalize()} x{quantity} ({resource_choice}): "
                             f"{self.format_decimal(item_total)} Flower (production cost)"
                         )
                     else:
@@ -437,7 +471,8 @@ Example: /status
 
             # Formatear mensaje
             msg = ["🌋 Lava Pit Production Cost by Season\n"]
-            msg.append("💡 Oil uses production cost calculation, other items use market prices\n")
+            msg.append(f"💡 Oil uses {resource_choice} production cost, other items use market prices\n")
+            msg.append(f"Use /oil leather or /oil wool to change oil resource type\n")
             
             for season, data in season_costs.items():
                 msg.append(f"\n🍂 {season.capitalize()}:")
@@ -447,7 +482,7 @@ Example: /status
             # Añadir total de todas las temporadas
             grand_total = sum(data["total"] for data in season_costs.values())
             msg.append(f"\n🌻 Grand Total (all seasons): {self.format_decimal(grand_total)} Flower")
-            msg.append("\n📝 Note: Oil cost is based on production, not market price")
+            msg.append(f"\n📝 Note: Oil cost is based on {resource_choice} production, not market price")
 
             await self.send_message(update, "\n".join(msg))
             await self.send_advertisement(update)
