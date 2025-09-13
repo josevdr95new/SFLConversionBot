@@ -1,14 +1,13 @@
 from decimal import Decimal
 from typing import Dict, Any
-from .services import PriceBot
 
-class Calculations(PriceBot):
+class Calculations:
     def __init__(self):
-        super().__init__()
+        pass
     
-    async def calculate_oil_cost(self, resource_type: str = "leather") -> Dict[str, Any]:
+    async def calculate_oil_cost(self, get_prices_func, resource_type: str = "leather") -> Dict[str, Any]:
         """Calculate oil production cost based on resource type (leather or wool)"""
-        prices = await self.get_prices()
+        prices = await get_prices_func()
         
         # Get required resource prices
         wood_price = prices.get("wood", Decimal('0'))
@@ -53,9 +52,9 @@ class Calculations(PriceBot):
             "price_50": price_50
         }
 
-    async def calculate_lavapit_costs(self, oil_unit_cost: Decimal, resource_type: str = "leather") -> Dict[str, Any]:
+    async def calculate_lavapit_costs(self, get_prices_func, oil_unit_cost: Decimal, resource_type: str = "leather") -> Dict[str, Any]:
         """Calculate Lava Pit seasonal production costs"""
-        prices = await self.get_prices()
+        prices = await get_prices_func()
         
         # Requisitos del Lava Pit por temporada
         seasons = {
