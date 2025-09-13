@@ -15,10 +15,10 @@ def escape_markdown(text: str) -> str:
     escape_chars = r'\_*[]()~`>#+-=|{}.!'
     return ''.join(['\\' + char if char in escape_chars else char for char in text])
 
-class Handlers(PriceBot, Calculations):
+class Handlers(PriceBot):
     def __init__(self):
-        PriceBot.__init__(self)
-        Calculations.__init__(self)
+        super().__init__()
+        self.calculations = Calculations()
         self.command_count = 0
         self.error_stats = {
             'api': 0,
@@ -28,13 +28,11 @@ class Handlers(PriceBot, Calculations):
             'other': 0
         }
         self.start_time = datetime.now()
-        self.advertisement_shown = {}  # Diccionario para rastrear anuncios por chat
-        # Nuevo: Seguimiento de usuarios únicos
+        self.advertisement_shown = {}
         self.unique_users = set()
         self.daily_users = set()
         self.last_reset = datetime.now().date()
-        # Nuevo: Almacenar la elección de recurso para oil
-        self.oil_resource_choice = {}  # {chat_id: 'leather' or 'wool'}
+        self.oil_resource_choice = {}
 
     async def update_user_stats(self, user_id: int) -> None:
         """Actualiza estadísticas de usuarios únicos"""
@@ -206,9 +204,8 @@ Example: /status
     async def handle_donate(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
         await self.update_user_stats(update.effective_user.id)
-        donate_msg = DONATION_ADDRESS  # Solo la dirección sin texto adicional
+        donate_msg = DONATION_ADDRESS
         await self.send_message(update, donate_msg)
-        # No mostrar publicidad en donación
 
     async def handle_prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1
@@ -224,10 +221,10 @@ Example: /status
             # Crear lista formateada: solo el precio en Flower, cada elemento en una línea
             price_list = []
             for item, price in sorted_items:
-                price_list.append(f"{item}: {self.format_decimal(price)} Flower")
+                price_list.append(f"{item}: {self.calculations.format_decimal(price)} Flower")
             
             # Añadir el precio de Flower (USD) al final
-            price_list.append(f"\n💱 Exchange rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}")
+            price_list.append(f"\n💱 Exchange rate: 1 Flower ≈ ${self.calculations.format_decimal(flower_rate)}")
             
             msg = f"📊 All Resource Prices\n\n{chr(10).join(price_list)}"
             
@@ -289,22 +286,22 @@ Example: /status
             chat_id = update.message.chat_id
             self.oil_resource_choice[chat_id] = resource_choice
             
-            # Calculate oil cost
-            oil_data = await self.calculate_oil_cost(resource_choice)
+            # Calculate oil cost using calculations instance
+            oil_data = await self.calculations.calculate_oil_cost(self.get_prices, resource_choice)
             
             msg = (
                 f"🛢 Oil Production Cost Analysis ({oil_data['resource_name']})\n\n"
                 f"📦 Resources for 3 drills (50 oil):\n"
-                f"• 60 Wood: {self.format_decimal(oil_data['total_wood_cost'])} Flower\n"
-                f"• 27 Iron: {self.format_decimal(oil_data['total_iron_cost'])} Flower\n"
+                f"• 60 Wood: {self.calculations.format_decimal(oil_data['total_wood_cost'])} Flower\n"
+                f"• 27 Iron: {self.calculations.format_decimal(oil_data['total_iron_cost'])} Flower\n"
                 f"• {oil_data['total_resource']} {oil_data['resource_name']}: "
-                f"{self.format_decimal(oil_data['total_resource_cost'])} Flower\n"
-                f"💸 Total cost: {self.format_decimal(oil_data['total_cost'])} Flower +300 coins\n\n"
-                f"📊 Unit cost: {self.format_decimal(oil_data['unit_price'])} Flower/oil\n\n"
+                f"{self.calculations.format_decimal(oil_data['total_resource_cost'])} Flower\n"
+                f"💸 Total cost: {self.calculations.format_decimal(oil_data['total_cost'])} Flower +300 coins\n\n"
+                f"📊 Unit cost: {self.calculations.format_decimal(oil_data['unit_price'])} Flower/oil\n\n"
                 f"💡 Price for:\n"
-                f"• 1 oil: {self.format_decimal(oil_data['unit_price'])} Flower\n"
-                f"• 10 oil: {self.format_decimal(oil_data['price_10'])} Flower\n"
-                f"• 50 oil: {self.format_decimal(oil_data['price_50'])} Flower\n\n"
+                f"• 1 oil: {self.calculations.format_decimal(oil_data['unit_price'])} Flower\n"
+                f"• 10 oil: {self.calculations.format_decimal(oil_data['price_10'])} Flower\n"
+                f"• 50 oil: {self.calculations.format_decimal(oil_data['price_50'])} Flower\n\n"
                 f"Note: Based on current market prices\n"
                 f"3 drills produce 50 oil (10+10+30)\n"
                 f"Use /oil leather or /oil wool to change resource type"
@@ -330,11 +327,11 @@ Example: /status
             resource_choice = self.oil_resource_choice.get(chat_id, "leather")
             
             # Calculate the oil production cost
-            oil_data = await self.calculate_oil_cost(resource_choice)
+            oil_data = await self.calculations.calculate_oil_cost(self.get_prices, resource_choice)
             oil_unit_cost = oil_data['unit_price']
 
             # Calculate Lava Pit costs
-            season_costs = await self.calculate_lavapit_costs(oil_unit_cost, resource_choice)
+            season_costs = await self.calculations.calculate_lavapit_costs(self.get_prices, oil_unit_cost, resource_choice)
 
             # Formatear mensaje
             msg = ["🌋 Lava Pit Production Cost by Season\n"]
@@ -344,11 +341,11 @@ Example: /status
             for season, data in season_costs.items():
                 msg.append(f"\n🍂 {season.capitalize()}:")
                 msg.extend(data["breakdown"])
-                msg.append(f"  💰 Total: {self.format_decimal(data['total'])} Flower")
+                msg.append(f"  💰 Total: {self.calculations.format_decimal(data['total'])} Flower")
             
             # Añadir total de todas las temporadas
             grand_total = sum(data["total"] for data in season_costs.values())
-            msg.append(f"\n🌻 Grand Total (all seasons): {self.format_decimal(grand_total)} Flower")
+            msg.append(f"\n🌻 Grand Total (all seasons): {self.calculations.format_decimal(grand_total)} Flower")
             msg.append(f"\n📝 Note: Oil cost is based on {resource_choice} production, not market price")
 
             await self.send_message(update, "\n".join(msg))
@@ -378,8 +375,8 @@ Example: /status
             
             usd_value = amount * flower_rate
             msg = (
-                f"🌻 {self.format_decimal(amount)} Flower ≈ ${self.format_decimal(usd_value)} USD\n"
-                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
+                f"🌻 {self.calculations.format_decimal(amount)} Flower ≈ ${self.calculations.format_decimal(usd_value)} USD\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.calculations.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
             await self.send_advertisement(update)
@@ -412,8 +409,8 @@ Example: /status
             
             flower_value = amount / flower_rate
             msg = (
-                f"💵 ${self.format_decimal(amount)} USD ≈ {self.format_decimal(flower_value)} Flower\n"
-                f"📊 Current rate: 1 Flower ≈ ${self.format_decimal(flower_rate)}"
+                f"💵 ${self.calculations.format_decimal(amount)} USD ≈ {self.calculations.format_decimal(flower_value)} Flower\n"
+                f"📊 Current rate: 1 Flower ≈ ${self.calculations.format_decimal(flower_rate)}"
             )
             await self.send_message(update, msg)
             await self.send_advertisement(update)
@@ -461,14 +458,14 @@ Example: /status
                 net_usd = gross_usd - fee
                 
                 msg = (
-                    f"📊 Unit Price: 1 {item_key} ≈ {self.format_decimal(price)} Flower\n"
-                    f"🪙 {self.format_decimal(amount)} {item_key} ≈ {self.format_decimal(gross_flower)} Flower\n"
-                    f"💵 Gross value: ≈ ${self.format_decimal(gross_usd)}\n"
-                    f"📉 Commission (10%): ≈ -${self.format_decimal(fee)}\n"
-                    f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
+                    f"📊 Unit Price: 1 {item_key} ≈ {self.calculations.format_decimal(price)} Flower\n"
+                    f"🪙 {self.calculations.format_decimal(amount)} {item_key} ≈ {self.calculations.format_decimal(gross_flower)} Flower\n"
+                    f"💵 Gross value: ≈ ${self.calculations.format_decimal(gross_usd)}\n"
+                    f"📉 Commission (10%): ≈ -${self.calculations.format_decimal(fee)}\n"
+                    f"🤑 Net received: ≈ ${self.calculations.format_decimal(net_usd)}"
                 )
             else:
-                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
+                msg = f"📈 1 {item_key} ≈ {self.calculations.format_decimal(price)} Flower (≈ ${self.calculations.format_decimal(price * flower_rate)} USD)"
 
             await self.send_message(update, msg)
             await self.send_advertisement(update)
@@ -502,7 +499,7 @@ Example: /status
                 await self.send_message(update, "⚠️ Error evaluating expression")
                 return
 
-            formatted_result = self.format_decimal(decimal_result)
+            formatted_result = self.calculations.format_decimal(decimal_result)
             await self.send_message(update, f"🧮 {expression} = {formatted_result}")
             await self.send_advertisement(update)
         except Exception as e:
@@ -592,22 +589,22 @@ Example: /status
             skills = bumpkin_info.get('skills', {}) if bumpkin_info else {}
             total_skills = len(skills) if skills else 0
             
-            # Build message - Corregido el problema con la f-string
+            # Build message
             vip_details_text = f" ({' '.join(vip_details)})" if vip_details else ""
             message = (
                 f"🌾 Farm ID: {land_id}\n"
                 f"🏜 Type: {land_type} | 📊 Expansion: {land_level}\n"
-                f"💰 Coins: {self.format_decimal(land_coins)} | 🌻 Flower Balance: {self.format_decimal(land_balance)}\n"
+                f"💰 Coins: {self.calculations.format_decimal(land_coins)} | 🌻 Flower Balance: {self.calculations.format_decimal(land_balance)}\n"
                 f"💎 Gems: {gem} | 🎖 Marks: {marks}\n"
                 f"✨ Charm: {charm} | 🎉 Cheer: {cheer}\n"
                 f"✅ Verified: {verified} | 👑 VIP: {vip}{vip_details_text}\n"
-                f"📉 Tax Free SFL: {self.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.format_decimal(tax_resource)}%\n"
+                f"📉 Tax Free SFL: {self.calculations.format_decimal(tax_free_sfl)} | 📈 Tax Resource: {self.calculations.format_decimal(tax_resource)}%\n"
                 f"🏆 Legacy: {legacy if legacy else 'None'}\n"
                 f"🗓 Created: {created}\n"
                 f"👥 Referrals: {total_referrals} (VIP: {total_vip_referrals})\n"
                 f"🔒 Ban Status: {ban_status} | Social Verified: {is_social_verified}\n\n"
                 f"👤 Bumpkin\n"
-                f"📊 Level: {bumpkin_level} | 🌟 Experience: {self.format_decimal(bumpkin_exp)}\n"
+                f"📊 Level: {bumpkin_level} | 🌟 Experience: {self.calculations.format_decimal(bumpkin_exp)}\n"
                 f"🎯 Total Skills: {total_skills}"
             )
             
