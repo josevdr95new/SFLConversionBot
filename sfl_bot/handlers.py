@@ -395,31 +395,34 @@ Example: /status
             oil_data = await self.calculate_oil_cost(resource_choice)
             oil_unit_cost = oil_data['unit_price']
 
-            # Requisitos del Lava Pit por temporada
+            # Nuevos requisitos del Lava Pit por temporada (actualizados)
             seasons = {
                 "autumn": {
                     "artichoke": 30,
                     "broccoli": 750,
                     "yam": 1000,
                     "gold": 5,
-                    "crimstone": 4
+                    "crimstone": 6  # Actualizado de 4 a 6
                 },
                 "winter": {
-                    "merino wool": 200,
+                    "merino wool": 150,  # Actualizado de 200 a 150
                     "onion": 400,
-                    "turnip": 200
+                    "turnip": 200,
+                    "crimstone": 5  # Nuevo requisito
                 },
                 "spring": {
                     "celestine": 2,
                     "lunara": 2,
                     "duskberry": 2,
                     "rhubarb": 2000,
-                    "kale": 100
+                    "crimstone": 10  # Nuevo requisito
+                    # Eliminado: "kale": 100
                 },
                 "summer": {
-                    "oil": 100,  # Usaremos el costo de producción calculado
+                    "oil": 70,  # Actualizado de 100 a 70
                     "pepper": 750,
-                    "zucchini": 1000
+                    "zucchini": 1000,
+                    "crimstone": 4  # Nuevo requisito
                 }
             }
 
