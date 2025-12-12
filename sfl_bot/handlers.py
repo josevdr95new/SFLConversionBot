@@ -1,5 +1,6 @@
 import re
 import asyncio
+import difflib
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
 from telegram import Update
@@ -569,6 +570,13 @@ Example: /status
                 (k for k in prices.keys() if k.replace(" ", "").lower() == item_name.replace(" ", "").lower()),
                 None
             )
+
+            suggestion = False
+            if not item_key:
+                close_matches = difflib.get_close_matches(item_name, prices.keys(), n=1, cutoff=0.6)
+                if close_matches:
+                    item_key = close_matches[0]
+                    suggestion = True
             
             if not item_key:
                 self.error_stats['input'] += 1
@@ -597,7 +605,13 @@ Example: /status
                     f"🤑 Net received: ≈ ${self.format_decimal(net_usd)}"
                 )
             else:
-                msg = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
+                price_text = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
+                if suggestion:
+                    msg = (f"❓ No se encontró '{item_name}'.\n"
+                           f"🤔 ¿Quisiste decir '{item_key}'?\n\n"
+                           f"{price_text}")
+                else:
+                    msg = price_text
 
             await self.send_message(update, msg)
             await self.send_advertisement(update)
