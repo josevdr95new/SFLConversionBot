@@ -1,5 +1,6 @@
 import re
 import asyncio
+import difflib
 from decimal import Decimal, InvalidOperation, DecimalException
 from typing import Optional
 from telegram import Update
@@ -125,6 +126,7 @@ class Handlers(PriceBot):
 /start - Show this message
 /help - Detailed help
 /prices - Show all resource prices
+/precio <item> - Show single resource price
 /donate - Show donation address
 /<item> - Unit price
 /<item> <amount> - Conversion with commission
@@ -173,6 +175,10 @@ class Handlers(PriceBot):
 📊 Prices Command:
 /prices - Show all resource prices
 Example: /prices
+
+📊 Precio Command:
+/precio <item> - Show single resource price
+Example: /precio sunflower
 
 💰 Donate Command:
 /donate - Show donation address
@@ -250,6 +256,54 @@ Example: /status
             self.error_stats['other'] += 1
             error_msg = f"❌ Error fetching prices: {str(e)[:100]}"
             await self.send_message(update, error_msg)
+
+    async def handle_precio(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        self.command_count += 1
+        await self.update_user_stats(update.effective_user.id)
+        try:
+            if not context.args:
+                await self.send_message(update, "ℹ️ Por favor, especifica un item. Ejemplo: /precio Girasol")
+                return
+
+            item_name = " ".join(context.args)
+            prices = await self.get_prices()
+
+            item_key = next(
+                (k for k in prices.keys() if k.replace(" ", "").lower() == item_name.replace(" ", "").lower()),
+                None
+            )
+
+            suggestion = False
+            if not item_key:
+                close_matches = difflib.get_close_matches(item_name, prices.keys(), n=1, cutoff=0.6)
+                if close_matches:
+                    item_key = close_matches[0]
+                    suggestion = True
+
+            if not item_key:
+                self.error_stats['input'] += 1
+                await self.send_message(update, f"❌ Item '{item_name}' no encontrado.")
+                return
+
+            price = prices[item_key]
+            rates = await self.get_exchange_rates()
+            flower_rate = rates.get("sfl", {}).get("usd", Decimal('0'))
+
+            price_text = f"📈 1 {item_key} ≈ {self.format_decimal(price)} Flower (≈ ${self.format_decimal(price * flower_rate)} USD)"
+
+            if suggestion:
+                msg = (f"❓ No se encontró '{item_name}'.\n"
+                       f"🤔 ¿Quisiste decir '{item_key}'?\n\n"
+                       f"{price_text}")
+            else:
+                msg = price_text
+
+            await self.send_message(update, msg)
+            await self.send_advertisement(update)
+
+        except Exception as e:
+            self.error_stats['other'] += 1
+            await self.send_message(update, "❌ Error procesando tu solicitud.")
 
     async def handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.command_count += 1

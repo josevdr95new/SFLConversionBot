@@ -24,13 +24,14 @@ def setup_application() -> Application:
         CommandHandler("start", bot.handle_start),
         CommandHandler("help", bot.handle_help),
         CommandHandler("prices", bot.handle_prices),
+        CommandHandler("precio", bot.handle_precio),
         CommandHandler("status", bot.handle_status),
         CommandHandler("calc", bot.handle_calc),
         CommandHandler("land", bot.handle_land),
         CommandHandler("oil", bot.handle_oil),
         CommandHandler("lavapit", bot.handle_lavapit),
         CommandHandler("donate", bot.handle_donate),
-        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil|lavapit|donate)$"), bot.handle_item)
+        MessageHandler(filters.COMMAND & ~filters.Regex(r"^/(start|help|prices|status|calc|land|oil|lavapit|donate|precio)$"), bot.handle_item)
     ])
     
     application.add_error_handler(bot.error_handler)
